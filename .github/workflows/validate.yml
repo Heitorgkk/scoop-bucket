@@ -143,19 +143,19 @@ jobs:
   setup-no-winget:
     # setup.ps1 as run by 'irm | iex' (script block), forcing the WinGet-free MSIX route,
     # plus Claude Code plugins and skills, under PowerShell 7.
-    name: setup.ps1 -NoWinGet + claude-extensions
+    name: setup.ps1 -NoWinGet + claude-extensions + claude-tools
     needs: [manifests, script-tests]
     runs-on: windows-latest
-    timeout-minutes: 60
+    timeout-minutes: 75
     steps:
       - uses: actions/checkout@v5
       - name: Install Scoop
         shell: pwsh
         run: ./tests/ci/Install-ScoopForCI.ps1
-      - name: setup.ps1 -Group ai,claude-extensions -NoWinGet
+      - name: setup.ps1 -Group ai,claude-extensions,claude-tools -NoWinGet
         shell: pwsh
         run: |
-          & ([scriptblock]::Create((Get-Content ./setup.ps1 -Raw))) -Group ai,claude-extensions -NoWinGet -SourcePath $env:GITHUB_WORKSPACE -BucketSource $env:GITHUB_WORKSPACE
+          & ([scriptblock]::Create((Get-Content ./setup.ps1 -Raw))) -Group ai,claude-extensions,claude-tools -NoWinGet -SourcePath $env:GITHUB_WORKSPACE -BucketSource $env:GITHUB_WORKSPACE
           "exit=$LASTEXITCODE" | Out-File -FilePath "$env:RUNNER_TEMP\setup-exit.txt"
           exit 0
       - name: Verify (desktop apps must be MSIX packages, not WinGet installs)
@@ -166,19 +166,24 @@ jobs:
           'Claude', 'OpenAI.Codex' | ForEach-Object { Get-AppxPackage -Name $_ } | Format-Table Name, Version, Publisher
           if (-not (Get-AppxPackage -Name Claude)) { throw 'Claude MSIX not registered' }
           if (-not (Get-AppxPackage -Name OpenAI.Codex)) { throw 'ChatGPT MSIX not registered' }
-          ./tests/ci/Assert-Installed.ps1 -Group ai,claude-extensions -External
+          ./tests/ci/Assert-Installed.ps1 -Group ai,claude-extensions,claude-tools -External
       - name: status.ps1
         shell: pwsh
         run: |
-          ./scripts/status.ps1 -Group ai,claude-extensions
+          ./scripts/status.ps1 -Group ai,claude-extensions,claude-tools
+          exit $LASTEXITCODE
+      - name: setup-claude.ps1 -Check (integrations configured, proxy untouched)
+        shell: pwsh
+        run: |
+          ./scripts/setup-claude.ps1 -Check
           exit $LASTEXITCODE
       - name: Second run skips everything
         shell: pwsh
         run: |
-          ./scripts/install.ps1 -Group ai,claude-extensions -NoWinGet -BucketSource $env:GITHUB_WORKSPACE
+          ./scripts/install.ps1 -Group ai,claude-extensions,claude-tools -NoWinGet -BucketSource $env:GITHUB_WORKSPACE
           exit $LASTEXITCODE
-      - name: -Update (MSIX, plugins, skills)
+      - name: -Update (MSIX, plugins, skills, uv tools)
         shell: pwsh
         run: |
-          ./scripts/install.ps1 -Group ai,claude-extensions -NoWinGet -Update -BucketSource $env:GITHUB_WORKSPACE
+          ./scripts/install.ps1 -Group ai,claude-extensions,claude-tools -NoWinGet -Update -BucketSource $env:GITHUB_WORKSPACE
           exit $LASTEXITCODE

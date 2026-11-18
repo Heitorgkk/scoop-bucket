@@ -20,6 +20,7 @@ $install = Join-Path $root 'scripts\install.ps1'
 $bootstrap = Join-Path $root 'scripts\bootstrap.ps1'
 $status = Join-Path $root 'scripts\status.ps1'
 $setup = Join-Path $root 'setup.ps1'
+$setupClaude = Join-Path $root 'scripts\setup-claude.ps1'
 $failures = 0
 
 function Invoke-Case([string] $Name, [int] $ExpectedExit, [string[]] $Arguments, [string] $ExpectOutput) {
@@ -41,7 +42,8 @@ Write-Host "Testing with: $Shell"
 # --- invalid input -> exit 2, nothing changed
 Invoke-Case 'install: unknown group' 2 @($install, '-Group', 'nope') 'Invalid group\(s\): nope'
 Invoke-Case 'install: one unknown among valid' 2 @($install, '-Group', 'main,bogus') 'Invalid group\(s\): bogus'
-Invoke-Case 'install: empty group' 2 @($install, '-Group', ',') 'Valid groups: main, ai, terminal, utilities, claude-extensions, all'
+Invoke-Case 'install: empty group' 2 @($install, '-Group', ',') 'Valid groups: main, ai, terminal, utilities, claude-extensions, claude-tools, all'
+Invoke-Case 'setup-claude: -Check with -Update' 2 @($setupClaude, '-Check', '-Update') 'cannot be combined'
 Invoke-Case 'install: missing catalog' 2 @($install, '-Group', 'main', '-DryRun', '-CatalogPath', 'C:\does\not\exist.json') 'Catalog not found'
 Invoke-Case 'bootstrap: unknown bucket' 2 @($bootstrap, '-Bucket', 'nope') 'Unknown bucket'
 Invoke-Case 'status: unknown group' 2 @($status, '-Group', 'nope') 'Invalid group\(s\): nope'
@@ -52,11 +54,15 @@ if ($LASTEXITCODE -ne 0) { Write-Host "PASS  install: -Group is mandatory (exit 
 else { Write-Host 'FAIL  install: -Group is mandatory (exit 0)' -ForegroundColor Red; $failures++ }
 
 # --- dry runs -> exit 0 and list the expected tools
-Invoke-Case 'dry run: main' 0 @($install, '-Group', 'main', '-DryRun') '6 tool\(s\): gh, git, nodejs, jdk, rustup, docker'
+Invoke-Case 'dry run: main' 0 @($install, '-Group', 'main', '-DryRun') '7 tool\(s\): gh, git, nodejs, jdk, rustup, msys2, docker'
+Invoke-Case 'dry run: main configures msys2-rust' 0 @($install, '-Group', 'main', '-DryRun') 'msys2 integration'
+Invoke-Case 'dry run: claude-tools' 0 @($install, '-Group', 'claude-tools', '-DryRun') '6 tool\(s\): uv, rtk, graphify, headroom, ponytail, context-mode'
+Invoke-Case 'dry run: claude-tools integrations' 0 @($install, '-Group', 'claude-tools', '-DryRun') 'Configuring 3 integration\(s\)'
+Invoke-Case 'dry run: -ScoopOnly skips integrations' 0 @($install, '-Group', 'claude-tools', '-DryRun', '-ScoopOnly') '2 tool\(s\): uv, rtk'
 Invoke-Case 'dry run: ai' 0 @($install, '-Group', 'ai', '-DryRun') 'claude-gui.*gemini-cli|gemini-cli'
 Invoke-Case 'dry run: case-insensitive + comma list' 0 @($install, '-Group', 'TERMINAL,utilities', '-DryRun') '12 tool\(s\)'
-Invoke-Case 'dry run: all = every tool once' 0 @($install, '-Group', 'all', '-DryRun') '34 tool\(s\)'
-Invoke-Case 'dry run: all + main does not duplicate' 0 @($install, '-Group', 'all,main', '-DryRun') '34 tool\(s\)'
+Invoke-Case 'dry run: all = every tool once' 0 @($install, '-Group', 'all', '-DryRun') '41 tool\(s\)'
+Invoke-Case 'dry run: all + main does not duplicate' 0 @($install, '-Group', 'all,main', '-DryRun') '41 tool\(s\)'
 Invoke-Case 'dry run: claude-extensions' 0 @($install, '-Group', 'claude-extensions', '-DryRun') '10 tool\(s\): commit-commands'
 Invoke-Case 'dry run: claude-extensions needs main/claude-code' 0 @($install, '-Group', 'claude-extensions', '-DryRun') 'Buckets needed: main, Heitorgkk'
 Invoke-Case 'dry run: -NoWinGet uses the MSIX route' 0 @($install, '-Group', 'ai', '-DryRun', '-NoWinGet') 'chatgpt-gui\s+msix'
@@ -66,6 +72,11 @@ Invoke-Case 'dry run: -ScoopOnly drops npm/winget' 0 @($install, '-Group', 'ai',
 $null = & $Shell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $status -Group terminal 2>&1
 if ($LASTEXITCODE -in 0, 1) { Write-Host "PASS  status: reports (exit $LASTEXITCODE)" -ForegroundColor Green }
 else { Write-Host "FAIL  status: exit $LASTEXITCODE" -ForegroundColor Red; $failures++ }
+
+# --- setup-claude.ps1 -Check only reports (0 = SUCCESS, 1 = PARTIAL/FAILED)
+$null = & $Shell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $setupClaude -Check 2>&1
+if ($LASTEXITCODE -in 0, 1) { Write-Host "PASS  setup-claude -Check: reports (exit $LASTEXITCODE)" -ForegroundColor Green }
+else { Write-Host "FAIL  setup-claude -Check: exit $LASTEXITCODE" -ForegroundColor Red; $failures++ }
 
 # --- setup.ps1 must parse as a script block (that is how 'irm ... | iex' runs it)
 try {
