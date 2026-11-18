@@ -1,7 +1,7 @@
 {
     "##": "Metapackage generated from groups.json by tools/catalog.py. Edit groups.json, not this file.",
-    "version": "1.1.0",
-    "description": "Essential development tools: GitHub CLI, Git, Node.js LTS, Temurin JDK LTS, rustup and Docker CLI/Engine.",
+    "version": "1.2.0",
+    "description": "Essential development tools: GitHub CLI, Git, Node.js LTS, Temurin JDK LTS, rustup, MSYS2 (GNU toolchain for Rust) and Docker CLI/Engine.",
     "homepage": "https://github.com/Heitorgkk/scoop-bucket",
     "license": "Unlicense",
     "url": "https://raw.githubusercontent.com/Heitorgkk/scoop-bucket/HEAD/meta/metapackage.txt",
@@ -12,9 +12,10 @@
         "main/nodejs-lts",
         "java/temurin-lts-jdk",
         "main/rustup",
+        "main/msys2",
         "main/docker"
     ],
     "notes": [
-        "Heitorgkk/main (Essential Development Tools): gh, git, nodejs, jdk, rustup, docker."
+        "Heitorgkk/main (Essential Development Tools): gh, git, nodejs, jdk, rustup, msys2, docker."
     ]
 }

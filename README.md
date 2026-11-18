@@ -24,6 +24,7 @@ irm https://raw.githubusercontent.com/Heitorgkk/scoop-bucket/main/setup.ps1 | ie
 | `terminal` | Terminal & CLI | `scoop install Heitorgkk/terminal` | `.\scripts\install.ps1 -Group terminal` |
 | `utilities` | Windows Utilities | `scoop install Heitorgkk/utilities` | `.\scripts\install.ps1 -Group utilities` |
 | `claude-extensions` | Claude Code Plugins & Skills | `scoop install Heitorgkk/claude-extensions` (only Claude Code + Git) | `.\scripts\install.ps1 -Group claude-extensions` |
+| `claude-tools` | Claude Code Token & Context Tools | `scoop install Heitorgkk/claude-tools` (uv, RTK, Claude Code, Git) | `.\scripts\setup-claude.ps1` |
 | `all` | Complete Environment | `scoop install Heitorgkk/all` (Scoop tools only) | `.\scripts\install.ps1 -Group all` |
 
 ## Requirements
@@ -162,6 +163,49 @@ Read-only report of what is installed. It exits with 1 if something is missing.
 .\scripts\status.ps1 -Group ai -MissingOnly   # only what is missing from 'ai'
 ```
 
+### `scripts/setup-claude.ps1`
+
+The Claude Code token/context pipeline (`claude-tools` group: RTK, Graphify, Headroom MCP, Ponytail,
+Context Mode). It runs `install.ps1 -Group claude-tools` and then prints a per-component report
+(`[OK]`, `[WARNING]`, `[FAILED]`, `[SKIPPED]`, `Result: SUCCESS / PARTIAL / FAILED`).
+
+```powershell
+.\scripts\setup-claude.ps1           # install/configure what is missing, then report
+.\scripts\setup-claude.ps1 -Update   # also upgrade uv tools, plugins and Scoop packages
+.\scripts\setup-claude.ps1 -Check    # report only; changes nothing
+```
+
+| Component | Installed with | Configured with |
+|---|---|---|
+| RTK | Scoop `main/rtk` | `rtk init -g --auto-patch --no-trust-filters` (global PreToolUse hook + `~/.claude/RTK.md`) |
+| Graphify | `uv tool install --python 3.13 graphifyy` (skipped when `graphify` is already on PATH, e.g. from pip) | `graphify install` (Claude Code skill; re-run on `-Update`) |
+| Headroom | `uv tool install --python 3.13 "headroom-ai[mcp]"` | `headroom mcp install --agent claude` (MCP server only) |
+| Ponytail | `claude plugin install ponytail@ponytail --scope user` | marketplace `DietrichGebert/ponytail` |
+| Context Mode | `claude plugin install context-mode@context-mode --scope user` | marketplace `mksglu/context-mode`; needs Node.js |
+
+Each configuration step runs only when its check says it is missing, so a second run changes nothing.
+The pipeline **never** starts `headroom proxy` or `rtk-proxy`, never sets `ANTHROPIC_BASE_URL` (install.ps1
+fails the run if it changed), and never removes plugins, MCP servers or marketplaces it did not add.
+Things only Claude Code itself can confirm: the live MCP connection (`/mcp`) and Context Mode health
+(`/ctx-doctor`). Build a project graph on demand with `/graphify .`. Restart Claude Code after setup.
+Design notes and the differences from the original command list: [`docs/claude-code-pipeline.md`](docs/claude-code-pipeline.md).
+
+### Rust with MSYS2 (GNU toolchain)
+
+The `main` group also installs `main/msys2`, and `install.ps1` wires it to Rust so `cargo build` works
+without the (large, admin-only) MSVC Build Tools:
+
+1. Initialises MSYS2 and runs `pacman -Syuu`, then `pacman -S --needed mingw-w64-x86_64-gcc mingw-w64-x86_64-pkgconf`
+   in the **MINGW64** environment (msvcrt, the runtime the `x86_64-pc-windows-gnu` target uses).
+2. Appends `~\scoop\apps\msys2\current\mingw64\bin` to the user PATH, so `gcc` is found by rustc and the `cc` crate.
+3. `rustup toolchain install stable-x86_64-pc-windows-gnu`.
+4. Makes it the default **only** when there is no default or the default is MSVC and no Build Tools are
+   installed. Otherwise the default is left alone; switch with `rustup default stable-x86_64-pc-windows-gnu`.
+
+`scoop update msys2` installs a fresh MSYS2 and drops the pacman packages; re-run
+`.\scripts\install.ps1 -Group main` afterwards (it reinstalls gcc). Update MSYS2 packages themselves with
+`.\scripts\install.ps1 -Group main -Update` (runs `pacman -Syuu` again). x64 only.
+
 ### Desktop apps without WinGet
 
 Claude Desktop and ChatGPT are normally installed with WinGet. When WinGet is missing, blocked
@@ -212,7 +256,8 @@ The table below is generated from [`groups.json`](groups.json).
 | `main` | [git](https://gitforwindows.org/) | Git for Windows (portable) | Scoop `main/git` |  |
 | `main` | [nodejs](https://nodejs.org/) | Node.js, current LTS line (includes npm) | Scoop `main/nodejs-lts` |  |
 | `main` | [jdk](https://adoptium.net/) | Eclipse Temurin JDK, latest LTS (sets JAVA_HOME) | Scoop `java/temurin-lts-jdk` | x64 build only; runs under emulation on Windows 11 ARM64. |
-| `main` | [rustup](https://rustup.rs/) | Rust toolchain manager (MSVC host by default) | Scoop `main/rustup` | The MSVC toolchain needs Microsoft C++ Build Tools (MSVC + Windows SDK), installed separately. |
+| `main` | [rustup](https://rustup.rs/) | Rust toolchain manager (MSVC host by default) | Scoop `main/rustup` | The MSVC toolchain needs Microsoft C++ Build Tools (MSVC + Windows SDK), installed separately. Without them, install.ps1 sets up the GNU toolchain with MSYS2 (see msys2). |
+| `main` | [msys2](https://www.msys2.org/) | MSYS2 with the MINGW64 gcc toolchain, wired to rustup's stable-x86_64-pc-windows-gnu | Scoop `main/msys2` | install.ps1 initialises MSYS2, installs mingw-w64-x86_64-gcc/pkgconf with pacman, appends mingw64\bin to the user PATH and installs the GNU Rust toolchain (made the default only when MSVC Build Tools are absent). 'scoop update msys2' drops pacman packages: re-run install.ps1 afterwards. x64 only. |
 | `main` | [docker](https://www.docker.com/) | Docker CLI + Docker Engine (dockerd) for Windows containers. NOT Docker Desktop | Scoop `main/docker` | dockerd only runs Windows containers and needs the Windows 'Containers' feature; registering the service (dockerd --register-service) needs an elevated shell. The CLI can talk to any remote/WSL Linux engine. x64 only. |
 | `ai` | [claude-code](https://code.claude.com/) | Claude Code CLI (official Anthropic native binary) | Scoop `main/claude-code` | Needs Git for Windows (Git Bash); provided by the main group. |
 | `ai` | [claude-gui](https://claude.com/download) | Claude Desktop, official Anthropic installer | WinGet `Anthropic.Claude` or official MSIX | WinGet, or (with -NoWinGet / when WinGet is unavailable) MSIX sideloading. Windows 10 2004 (19041) or later. |
@@ -242,6 +287,12 @@ The table below is generated from [`groups.json`](groups.json).
 | `claude-extensions` | [frontend-design](https://github.com/anthropics/claude-plugins-official/tree/main/plugins/frontend-design) | Production-grade frontend/UI design guidance | Claude plugin `frontend-design@claude-plugins-official` |  |
 | `claude-extensions` | [document-skills](https://github.com/anthropics/skills) | Excel, Word, PowerPoint and PDF skills | Claude plugin `document-skills@anthropic-agent-skills` |  |
 | `claude-extensions` | [scoop-windows](https://github.com/Heitorgkk/scoop-bucket/tree/main/claude/skills/scoop-windows) | Personal skill: how this machine installs tools (Scoop, Heitorgkk bucket, npm, WinGet) | Claude skill `claude/skills/scoop-windows` |  |
+| `claude-tools` | [uv](https://docs.astral.sh/uv/) | Python package and tool manager (installs Graphify and Headroom, and Python 3.13) | Scoop `main/uv` |  |
+| `claude-tools` | [rtk](https://www.rtk-ai.app/) | RTK: rewrites shell commands to cut LLM token use; global Claude Code hook via 'rtk init -g' | Scoop `main/rtk` | install.ps1 runs 'rtk init -g --auto-patch --no-trust-filters' (PreToolUse hook + ~/.claude/RTK.md). The optional rtk-proxy is not set up. x64 only. |
+| `claude-tools` | [graphify](https://github.com/Graphify-Labs/graphify) | Graphify: code knowledge graph for agents; installs its Claude Code skill ('graphify install') | uv tool `graphifyy` | Installed with 'uv tool install' (skipped when graphify is already on PATH from pip). Build a project graph on demand with /graphify . inside Claude Code. |
+| `claude-tools` | [headroom](https://github.com/headroomlabs-ai/headroom) | Headroom: context compression; registers its MCP server in Claude Code ('headroom mcp install') | uv tool `headroom-ai[mcp]` | Only the MCP server is configured (--agent claude). The proxy (headroom proxy, ANTHROPIC_BASE_URL) is never started or set; enable it yourself if you want it. Check the live connection with /mcp. |
+| `claude-tools` | [ponytail](https://github.com/DietrichGebert/ponytail) | Ponytail: 'lazy senior dev' mode (YAGNI, stdlib first, smallest working change) | Claude plugin `ponytail@ponytail` | Its task board writes a CSV row per turn to ~/.config/ponytail/band/ (option 'ledger'); the webhook is off unless you set one with 'claude plugin configure'. |
+| `claude-tools` | [context-mode](https://github.com/mksglu/context-mode) | Context Mode: sandboxed execution, FTS5 search and session continuity to save context | Claude plugin `context-mode@context-mode` | Its MCP server runs on Node.js (main/nodejs-lts is installed when missing). Diagnose with /ctx-doctor inside Claude Code. |
 <!-- END GENERATED TOOLS TABLE -->
 
 ### Why some tools are not Scoop packages
@@ -251,6 +302,7 @@ The table below is generated from [`groups.json`](groups.json).
 | Claude Desktop | WinGet `Anthropic.Claude` | WinGet installs Anthropic's official signed installer from `downloads.claude.ai`. `extras/claude` repackages the old Squirrel `.nupkg`. Features that need the official install (Cowork) report *"requires a newer installation"* ([ScoopInstaller/Extras#18647](https://github.com/ScoopInstaller/Extras/issues/18647)), and its hash has broken on several releases. |
 | ChatGPT Desktop | WinGet `OpenAI.ChatGPT` | WinGet installs the same signed MSIX that OpenAI publishes on `persistent.oaistatic.com` (it's also the Microsoft Store build). `extras/chatgpt` unpacks the MSIX and runs it *without package identity*. That made the app fail at startup ([ScoopInstaller/Extras#18777](https://github.com/ScoopInstaller/Extras/issues/18777)), and the workaround disables the app's own updater. |
 | Gemini CLI | npm `@google/gemini-cli` | Google publishes it only on npm; there is no Scoop manifest. |
+| Graphify, Headroom | uv tool `graphifyy`, `headroom-ai[mcp]` | Python CLIs published only on PyPI. `uv tool` gives each its own environment and a pinned Python 3.13 (downloaded by uv); `main/uv` keeps everything under `~\scoop\persist\uv`. |
 | Docker | Scoop `main/docker` | Installs the **Docker CLI and Docker Engine (`dockerd`) for Windows containers**. It is **not Docker Desktop** and cannot run Linux containers. The CLI can still talk to a remote, WSL or other Linux engine (`DOCKER_HOST`, `docker context`). `dockerd --register-service` needs an elevated shell and the Windows *Containers* feature. Docker Compose is a separate package (`main/docker-compose`). |
 | OpenCode | Scoop `main/opencode` | This is the **CLI** (v2). The desktop app is `extras/opencode-desktop` and isn't included. v1 lives in `versions/opencode1`. |
 
@@ -258,7 +310,7 @@ The table below is generated from [`groups.json`](groups.json).
 
 | | Scoop | npm | WinGet |
 |---|---|---|---|
-| Used for | Most tools (21 of 24 apps) | Gemini CLI | Claude Desktop, ChatGPT Desktop |
+| Used for | Most tools (24 of 29 apps) | Gemini CLI (Graphify and Headroom use `uv tool`) | Claude Desktop, ChatGPT Desktop |
 | Install location | `~\scoop\apps\<app>` (portable, per user) | npm global prefix. With `main/nodejs-lts`: `~\scoop\persist\nodejs-lts\bin` (kept across Node updates) | Per-user MSIX / installer managed by Windows |
 | Admin rights | No | No | No (per-user MSIX) |
 | Update | `scoop update <app>` / `scoop update *` | `npm install -g @google/gemini-cli@latest` | `winget upgrade --id <id> --exact` |
@@ -277,7 +329,8 @@ installs their x64 builds, which run under x64 emulation. All other tools, and t
 - **rustup**: uses the MSVC toolchain by default, which needs the
   [Microsoft C++ Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/)
   ("MSVC" and "Windows SDK" workloads). They aren't installed automatically because they
-  are large and need admin rights. Run `rustup default stable` after installing.
+  are large and need admin rights. Without them, `install.ps1` sets up the GNU toolchain with MSYS2
+  instead (see [Rust with MSYS2](#rust-with-msys2-gnu-toolchain)).
 - **jdk**: `temurin-lts-jdk` follows the latest Temurin LTS and sets `JAVA_HOME`.
 - **claude-code**: needs Git Bash, which the `main` group provides.
 - **oh-my-posh**: add it to your profile, for example
@@ -304,17 +357,20 @@ updated by the official buckets.
 ```text
 scoop-bucket/
 ├── bucket/                 # Scoop manifests (generated from groups.json)
-│   ├── main.json  ai.json  terminal.json  utilities.json  claude-extensions.json  all.json
+│   ├── main.json  ai.json  terminal.json  utilities.json  claude-extensions.json  claude-tools.json  all.json
 ├── groups.json             # single source of truth: groups, tools, sources, buckets, marketplaces
 ├── setup.ps1               # one-line installer for a bare machine
 ├── claude/skills/          # personal Claude Code skills installed by the claude-extensions group
+├── docs/                   # design notes (claude-code-pipeline.md)
 ├── .claude/skills/add-tool # project skill: how to add a tool to this repository
 ├── meta/metapackage.txt    # tiny fixed payload downloaded by every metapackage
 ├── scripts/
 │   ├── bootstrap.ps1
 │   ├── install.ps1
 │   ├── status.ps1
-│   └── lib/                # Common.ps1 (catalog, Scoop, PATH), Tools.ps1 (per-source install/detect)
+│   ├── setup-claude.ps1    # Claude Code token/context pipeline (claude-tools) + report
+│   └── lib/                # Common.ps1 (catalog, Scoop, PATH), Tools.ps1 (per-source install/detect),
+│                           # Integrations.ps1 (rtk/graphify/headroom/msys2 configuration steps)
 ├── tools/catalog.py        # generate + validate bucket/ and the README table
 ├── tests/                  # script tests and CI helpers
 └── .github/workflows/validate.yml
@@ -344,12 +400,14 @@ hash is updated.
    ```
 
    - `source`: `scoop` (`package` = `bucket/app`, always explicit), `npm` (`package` = npm
-     name), `winget` (`package` = WinGet id), `claude-plugin` (`package` = `plugin@marketplace`)
+     name), `uv-tool` (`package` = PyPI requirement, plus `command` and optional `python`), `winget` (`package` = WinGet id), `claude-plugin` (`package` = `plugin@marketplace`)
      or `claude-skill` (`package` = `claude/skills/<name>`).
    - For `winget` apps, add a `direct` block (`type: msix`, `url.x64`/`url.arm64`, `appxName`, and an exact
      `publisher` and/or a `signer` name) with the vendor's stable "latest" MSIX URL, so the app also installs without WinGet.
    - Optional: `requirements` (shown in the README), `requires` (Scoop packages that must
      exist first, for example `["main/nodejs-lts"]` for npm tools).
+   - Optional `integration`: a post-install configuration step implemented in
+     `scripts/lib/Integrations.ps1` (`rtk`, `graphify`, `headroom-mcp`, `msys2-rust`).
    - A new official bucket must also be added to `buckets`.
 3. Regenerate and validate:
 

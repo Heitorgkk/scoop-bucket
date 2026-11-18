@@ -11,12 +11,14 @@
     },
     "claudeMarketplaces": {
         "claude-plugins-official": "anthropics/claude-plugins-official",
-        "anthropic-agent-skills": "anthropics/skills"
+        "anthropic-agent-skills": "anthropics/skills",
+        "ponytail": "DietrichGebert/ponytail",
+        "context-mode": "mksglu/context-mode"
     },
     "groups": {
         "main": {
             "title": "Essential Development Tools",
-            "description": "Essential development tools: GitHub CLI, Git, Node.js LTS, Temurin JDK LTS, rustup and Docker CLI/Engine.",
+            "description": "Essential development tools: GitHub CLI, Git, Node.js LTS, Temurin JDK LTS, rustup, MSYS2 (GNU toolchain for Rust) and Docker CLI/Engine.",
             "tools": [
                 {
                     "name": "gh",
@@ -58,7 +60,17 @@
                     "command": "rustup",
                     "summary": "Rust toolchain manager (MSVC host by default)",
                     "homepage": "https://rustup.rs/",
-                    "requirements": "The MSVC toolchain needs Microsoft C++ Build Tools (MSVC + Windows SDK), installed separately."
+                    "requirements": "The MSVC toolchain needs Microsoft C++ Build Tools (MSVC + Windows SDK), installed separately. Without them, install.ps1 sets up the GNU toolchain with MSYS2 (see msys2)."
+                },
+                {
+                    "name": "msys2",
+                    "source": "scoop",
+                    "package": "main/msys2",
+                    "command": "msys2",
+                    "summary": "MSYS2 with the MINGW64 gcc toolchain, wired to rustup's stable-x86_64-pc-windows-gnu",
+                    "homepage": "https://www.msys2.org/",
+                    "requirements": "install.ps1 initialises MSYS2, installs mingw-w64-x86_64-gcc/pkgconf with pacman, appends mingw64\\bin to the user PATH and installs the GNU Rust toolchain (made the default only when MSVC Build Tools are absent). 'scoop update msys2' drops pacman packages: re-run install.ps1 afterwards. x64 only.",
+                    "integration": "msys2-rust"
                 },
                 {
                     "name": "docker",
@@ -339,15 +351,91 @@
                 }
             ]
         },
+        "claude-tools": {
+            "title": "Claude Code Token & Context Tools",
+            "description": "Claude Code token/context savers: RTK, Graphify, Headroom MCP, Ponytail and Context Mode, installed and wired into Claude Code by scripts/install.ps1 or scripts/setup-claude.ps1 (the metapackage installs uv, RTK, Claude Code and Git).",
+            "requires": [
+                "main/claude-code",
+                "main/git"
+            ],
+            "tools": [
+                {
+                    "name": "uv",
+                    "source": "scoop",
+                    "package": "main/uv",
+                    "command": "uv",
+                    "summary": "Python package and tool manager (installs Graphify and Headroom, and Python 3.13)",
+                    "homepage": "https://docs.astral.sh/uv/"
+                },
+                {
+                    "name": "rtk",
+                    "source": "scoop",
+                    "package": "main/rtk",
+                    "command": "rtk",
+                    "summary": "RTK: rewrites shell commands to cut LLM token use; global Claude Code hook via 'rtk init -g'",
+                    "homepage": "https://www.rtk-ai.app/",
+                    "requirements": "install.ps1 runs 'rtk init -g --auto-patch --no-trust-filters' (PreToolUse hook + ~/.claude/RTK.md). The optional rtk-proxy is not set up. x64 only.",
+                    "integration": "rtk"
+                },
+                {
+                    "name": "graphify",
+                    "source": "uv-tool",
+                    "package": "graphifyy",
+                    "command": "graphify",
+                    "python": "3.13",
+                    "summary": "Graphify: code knowledge graph for agents; installs its Claude Code skill ('graphify install')",
+                    "homepage": "https://github.com/Graphify-Labs/graphify",
+                    "requirements": "Installed with 'uv tool install' (skipped when graphify is already on PATH from pip). Build a project graph on demand with /graphify . inside Claude Code.",
+                    "requires": [
+                        "main/uv"
+                    ],
+                    "integration": "graphify"
+                },
+                {
+                    "name": "headroom",
+                    "source": "uv-tool",
+                    "package": "headroom-ai[mcp]",
+                    "command": "headroom",
+                    "python": "3.13",
+                    "summary": "Headroom: context compression; registers its MCP server in Claude Code ('headroom mcp install')",
+                    "homepage": "https://github.com/headroomlabs-ai/headroom",
+                    "requirements": "Only the MCP server is configured (--agent claude). The proxy (headroom proxy, ANTHROPIC_BASE_URL) is never started or set; enable it yourself if you want it. Check the live connection with /mcp.",
+                    "requires": [
+                        "main/uv"
+                    ],
+                    "integration": "headroom-mcp"
+                },
+                {
+                    "name": "ponytail",
+                    "source": "claude-plugin",
+                    "package": "ponytail@ponytail",
+                    "summary": "Ponytail: 'lazy senior dev' mode (YAGNI, stdlib first, smallest working change)",
+                    "homepage": "https://github.com/DietrichGebert/ponytail",
+                    "requirements": "Its task board writes a CSV row per turn to ~/.config/ponytail/band/ (option 'ledger'); the webhook is off unless you set one with 'claude plugin configure'."
+                },
+                {
+                    "name": "context-mode",
+                    "source": "claude-plugin",
+                    "package": "context-mode@context-mode",
+                    "summary": "Context Mode: sandboxed execution, FTS5 search and session continuity to save context",
+                    "homepage": "https://github.com/mksglu/context-mode",
+                    "requirements": "Its MCP server runs on Node.js (main/nodejs-lts is installed when missing). Diagnose with /ctx-doctor inside Claude Code.",
+                    "requires": [
+                        "main/nodejs-lts"
+                    ]
+                }
+            ]
+        },
         "all": {
             "title": "Complete Environment",
-            "description": "Complete environment: every Heitorgkk group (main, ai, terminal, utilities, claude-extensions).",
+            "description": "Complete environment: every Heitorgkk group (main, ai, terminal, utilities, claude-extensions, claude-tools).",
             "includes": [
                 "main",
                 "ai",
                 "terminal",
                 "utilities",
-                "claude-extensions"
+                "claude-extensions",
+                "claude-tools"
             ]
         }
     }

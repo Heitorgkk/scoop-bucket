@@ -1,7 +1,7 @@
 {
     "##": "Metapackage generated from groups.json by tools/catalog.py. Edit groups.json, not this file.",
-    "version": "1.1.0",
-    "description": "Complete environment: every Heitorgkk group (main, ai, terminal, utilities, claude-extensions).",
+    "version": "1.2.0",
+    "description": "Complete environment: every Heitorgkk group (main, ai, terminal, utilities, claude-extensions, claude-tools).",
     "homepage": "https://github.com/Heitorgkk/scoop-bucket",
     "license": "Unlicense",
     "url": "https://raw.githubusercontent.com/Heitorgkk/scoop-bucket/HEAD/meta/metapackage.txt",
@@ -11,10 +11,11 @@
         "Heitorgkk/ai",
         "Heitorgkk/terminal",
         "Heitorgkk/utilities",
-        "Heitorgkk/claude-extensions"
+        "Heitorgkk/claude-extensions",
+        "Heitorgkk/claude-tools"
     ],
     "notes": [
-        "Heitorgkk/all (Complete Environment): main, ai, terminal, utilities, claude-extensions.",
+        "Heitorgkk/all (Complete Environment): main, ai, terminal, utilities, claude-extensions, claude-tools.",
         "Not available through Scoop; install with scripts/install.ps1 -Group all:",
         "  claude-gui: winget Anthropic.Claude",
         "  gemini-cli: npm @google/gemini-cli",
@@ -28,6 +29,10 @@
         "  skill-creator: claude-plugin skill-creator@claude-plugins-official",
         "  frontend-design: claude-plugin frontend-design@claude-plugins-official",
         "  document-skills: claude-plugin document-skills@anthropic-agent-skills",
-        "  scoop-windows: claude-skill claude/skills/scoop-windows"
+        "  scoop-windows: claude-skill claude/skills/scoop-windows",
+        "  graphify: uv-tool graphifyy",
+        "  headroom: uv-tool headroom-ai[mcp]",
+        "  ponytail: claude-plugin ponytail@ponytail",
+        "  context-mode: claude-plugin context-mode@context-mode"
     ]
 }
