@@ -153,7 +153,7 @@ function Invoke-DesktopTool($Tool) {
     $label = if ($route -eq 'msix') { "msix ($($direct.appxName))" } else { $Tool.package }
 
     $installed = Test-DesktopTool $Tool
-    if ($installed -and -not $Update) { Add-Result $Tool.name $Tool.source 'already installed' $label; return }
+    if ($installed -and -not $Update) { Add-Result $Tool.name $(if ($route) { $route } else { 'winget' }) 'already installed' $label; return }
     if (-not $route) {
         $why = if ($NoWinGet) { '-NoWinGet was given' } else { 'winget is not available' }
         $status = if ($DryRun) { 'blocked' } else { 'failed' }
