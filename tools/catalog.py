@@ -28,9 +28,10 @@ BUCKET_DIR = ROOT / "bucket"
 README = ROOT / "README.md"
 PAYLOAD = ROOT / "meta" / "metapackage.txt"
 
-METAPACKAGE_VERSION = "1.0.0"
+METAPACKAGE_VERSION = "1.1.0"
 LICENSE = "Unlicense"
-SOURCES = {"scoop", "npm", "winget"}
+SOURCES = {"scoop", "npm", "winget", "claude-plugin", "claude-skill"}
+DIRECT_ARCHS = {"x64", "arm64"}
 SCHEMA_URL = "https://raw.githubusercontent.com/ScoopInstaller/Scoop/master/schema.json"
 README_BEGIN = "<!-- BEGIN GENERATED TOOLS TABLE (tools/catalog.py generate) -->"
 README_END = "<!-- END GENERATED TOOLS TABLE -->"
@@ -70,14 +71,17 @@ def build_manifest(catalog: dict, name: str) -> dict:
     bucket = catalog["bucket"]["name"]
     tools = g.get("tools", [])
     depends = [t["package"] for t in tools if t["source"] == "scoop"]
+    depends += [r for r in g.get("requires", []) if r not in depends]
     depends += [f"{bucket}/{inc}" for inc in g.get("includes", [])]
 
     notes = []
-    if tools:
-        scoop_names = ", ".join(t["name"] for t in tools if t["source"] == "scoop")
-        notes.append(f"{bucket}/{name} ({g['title']}): {scoop_names}.")
-    else:
+    scoop_names = [t["name"] for t in tools if t["source"] == "scoop"]
+    if scoop_names:
+        notes.append(f"{bucket}/{name} ({g['title']}): {', '.join(scoop_names)}.")
+    elif g.get("includes"):
         notes.append(f"{bucket}/{name} ({g['title']}): {', '.join(g['includes'])}.")
+    else:
+        notes.append(f"{bucket}/{name} ({g['title']}): prerequisites {', '.join(g.get('requires', []))}.")
     external = [t for t in group_tools(catalog, name) if t["source"] != "scoop"]
     if external:
         notes.append("Not available through Scoop; install with scripts/install.ps1 -Group " + name + ":")
@@ -105,7 +109,14 @@ def source_label(t: dict) -> str:
         return f"Scoop `{t['package']}`"
     if t["source"] == "npm":
         return f"npm `{t['package']}`"
-    return f"WinGet `{t['package']}`"
+    if t["source"] == "claude-plugin":
+        return f"Claude plugin `{t['package']}`"
+    if t["source"] == "claude-skill":
+        return f"Claude skill `{t['package']}`"
+    label = f"WinGet `{t['package']}`"
+    if t.get("direct"):
+        label += " or official MSIX"
+    return label
 
 
 def build_readme_table(catalog: dict) -> str:
@@ -143,7 +154,11 @@ def check_catalog(catalog: dict) -> list[str]:
     seen_names: dict[str, str] = {}
     seen_packages: dict[str, str] = {}
 
+    marketplaces = catalog.get("claudeMarketplaces", {})
     for gname, g in groups.items():
+        for ref in g.get("requires", []):
+            if ref.count("/") != 1 or ref.split("/")[0] not in buckets:
+                errors.append(f"group '{gname}': requires '{ref}' must be 'bucket/package' with a declared bucket")
         if gname != gname.lower():
             errors.append(f"group '{gname}': names must be lowercase")
         if not g.get("tools") and not g.get("includes"):
@@ -164,6 +179,14 @@ def check_catalog(catalog: dict) -> list[str]:
             if t["package"] in seen_packages:
                 errors.append(f"package '{t['package']}' is declared in '{seen_packages[t['package']]}' and '{gname}'")
             seen_packages[t["package"]] = gname
+            if src == "claude-plugin":
+                plugin, _, mp = t["package"].partition("@")
+                if not plugin or mp not in marketplaces:
+                    errors.append(f"tool '{t['name']}': '{t['package']}' must be plugin@marketplace with a marketplace declared in 'claudeMarketplaces'")
+            if src == "claude-skill":
+                errors += check_skill(t)
+            if t.get("direct"):
+                errors += check_direct(t)
             refs = [t["package"]] if src == "scoop" else []
             refs += t.get("requires", [])
             for ref in refs:
@@ -194,6 +217,40 @@ def check_catalog(catalog: dict) -> list[str]:
             errors.append(f"group 'all' does not include: {', '.join(sorted(missing))}")
         if groups["all"].get("tools"):
             errors.append("group 'all' must only use 'includes' (no duplicated tool lists)")
+    return errors
+
+
+def check_skill(t: dict) -> list[str]:
+    path = ROOT / t["package"]
+    skill = path / "SKILL.md"
+    if not skill.is_file():
+        return [f"skill '{t['name']}': {t['package']}/SKILL.md not found"]
+    text = skill.read_text(encoding="utf-8")
+    if not text.startswith("---\n") or "\n---" not in text[4:]:
+        return [f"skill '{t['name']}': SKILL.md must start with YAML frontmatter"]
+    front = text[4:text.index("\n---", 4)]
+    fields = dict(line.split(":", 1) for line in front.splitlines() if ":" in line and not line.startswith(" "))
+    errors = []
+    if fields.get("name", "").strip() != path.name:
+        errors.append(f"skill '{t['name']}': frontmatter name must be '{path.name}'")
+    if not fields.get("description", "").strip():
+        errors.append(f"skill '{t['name']}': frontmatter needs a description")
+    return errors
+
+
+def check_direct(t: dict) -> list[str]:
+    d = t["direct"]
+    errors = []
+    if t["source"] != "winget":
+        errors.append(f"tool '{t['name']}': 'direct' is only supported for winget tools")
+    if d.get("type") != "msix":
+        errors.append(f"tool '{t['name']}': direct.type must be 'msix'")
+    urls = d.get("url", {})
+    if "x64" not in urls or set(urls) - DIRECT_ARCHS or not all(u.startswith("https://") for u in urls.values()):
+        errors.append(f"tool '{t['name']}': direct.url needs https URLs for x64 (and optionally arm64)")
+    for key in ("appxName", "signer"):
+        if not d.get(key):
+            errors.append(f"tool '{t['name']}': direct.{key} is required")
     return errors
 
 
@@ -264,8 +321,10 @@ def check_online(catalog: dict) -> list[str]:
                 refs[t["package"]] = t["name"]
             for r in t.get("requires", []):
                 refs[r] = t["name"]
+    checked = set()
     for ref, tool in sorted(refs.items()):
         bucket, package = ref.split("/")
+        checked.add(ref)
         if bucket == own:
             continue
         url = raw_manifest_url(catalog["buckets"][bucket], package)
@@ -276,8 +335,45 @@ def check_online(catalog: dict) -> list[str]:
             errors.append(f"tool '{tool}': {ref} not found in its bucket ({exc.code} {url})")
         except (urllib.error.URLError, json.JSONDecodeError) as exc:
             errors.append(f"tool '{tool}': could not fetch {url}: {exc}")
+    for g in catalog["groups"].values():
+        for r in g.get("requires", []):
+            refs[r] = "group requires"
+    for ref, tool in sorted(refs.items()):
+        if ref in checked:
+            continue
+        bucket, package = ref.split("/")
+        url = raw_manifest_url(catalog["buckets"][bucket], package)
+        try:
+            http_get(url)
+        except urllib.error.URLError as exc:
+            errors.append(f"{tool}: {ref} not found ({exc})")
+    market_cache: dict[str, set] = {}
     for gname, g in catalog["groups"].items():
         for t in g.get("tools", []):
+            if t["source"] == "claude-plugin":
+                plugin, _, mp = t["package"].partition("@")
+                if mp not in market_cache:
+                    repo = catalog["claudeMarketplaces"][mp]
+                    try:
+                        data = json.loads(http_get(f"https://raw.githubusercontent.com/{repo}/HEAD/.claude-plugin/marketplace.json"))
+                        market_cache[mp] = {p["name"] for p in data.get("plugins", [])}
+                        if data.get("name") != mp:
+                            errors.append(f"marketplace {repo} is named '{data.get('name')}', not '{mp}'")
+                    except (urllib.error.URLError, json.JSONDecodeError) as exc:
+                        errors.append(f"marketplace {mp} ({repo}) not readable: {exc}")
+                        market_cache[mp] = set()
+                if plugin in market_cache[mp]:
+                    print(f"  ok   plugin {t['package']}")
+                elif market_cache[mp]:
+                    errors.append(f"tool '{t['name']}': plugin '{plugin}' not found in marketplace '{mp}'")
+            if t.get("direct"):
+                for arch, url in t["direct"]["url"].items():
+                    try:
+                        req = urllib.request.Request(url, headers={"User-Agent": "scoop-bucket-validator", "Range": "bytes=0-0"})
+                        with urllib.request.urlopen(req, timeout=60) as resp:
+                            print(f"  ok   direct {t['name']} {arch} -> {resp.geturl()}")
+                    except urllib.error.URLError as exc:
+                        errors.append(f"tool '{t['name']}': direct {arch} URL {url} not reachable: {exc}")
             if t["source"] == "npm":
                 url = f"https://registry.npmjs.org/{t['package'].replace('/', '%2F')}/latest"
                 try:
