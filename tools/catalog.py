@@ -248,9 +248,10 @@ def check_direct(t: dict) -> list[str]:
     urls = d.get("url", {})
     if "x64" not in urls or set(urls) - DIRECT_ARCHS or not all(u.startswith("https://") for u in urls.values()):
         errors.append(f"tool '{t['name']}': direct.url needs https URLs for x64 (and optionally arm64)")
-    for key in ("appxName", "signer"):
-        if not d.get(key):
-            errors.append(f"tool '{t['name']}': direct.{key} is required")
+    if not d.get("appxName"):
+        errors.append(f"tool '{t['name']}': direct.appxName is required")
+    if not d.get("signer") and not d.get("publisher"):
+        errors.append(f"tool '{t['name']}': direct needs 'publisher' (exact MSIX publisher) and/or 'signer' (text in the signer name)")
     return errors
 
 

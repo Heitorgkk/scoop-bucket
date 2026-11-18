@@ -143,10 +143,16 @@ function Install-DirectMsix($Tool) {
 
         $identity = Read-MsixIdentity $file
         if ($identity.Name -ne $direct.appxName) { throw "downloaded package is '$($identity.Name)', expected '$($direct.appxName)'" }
-        if ($identity.Publisher -notmatch [regex]::Escape($direct.signer)) { throw "unexpected publisher '$($identity.Publisher)'" }
+        # Windows only installs an MSIX whose signing certificate subject equals the manifest Publisher,
+        # so pinning the publisher pins the signer. Store-signed packages use a GUID publisher.
+        $publisher = Get-ToolProperty $direct 'publisher'
+        $signer = Get-ToolProperty $direct 'signer'
+        if ($publisher -and $identity.Publisher -ne $publisher) { throw "unexpected publisher '$($identity.Publisher)' (expected '$publisher')" }
+        if ($signer -and $identity.Publisher -notmatch [regex]::Escape($signer)) { throw "unexpected publisher '$($identity.Publisher)'" }
         $sig = Get-AuthenticodeSignature -LiteralPath $file
         if ($sig.Status -eq 'Valid') {
-            if ($sig.SignerCertificate.Subject -notmatch [regex]::Escape($direct.signer)) { throw "unexpected signer '$($sig.SignerCertificate.Subject)'" }
+            $subject = $sig.SignerCertificate.Subject
+            if (($publisher -and $subject -ne $publisher) -or ($signer -and $subject -notmatch [regex]::Escape($signer))) { throw "unexpected signer '$subject'" }
             Write-Info "Signature valid: $($sig.SignerCertificate.Subject)"
         } elseif ($sig.Status -in 'NotSigned', 'HashMismatch', 'NotTrusted') {
             throw "signature check failed: $($sig.Status)"
