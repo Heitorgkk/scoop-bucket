@@ -160,6 +160,7 @@ function Test-WinGetPackage([string] $Id) {
 
 function Invoke-WinGetTool($Tool) {
     if (-not (Test-Command winget)) {
+        if ($DryRun) { Add-Result $Tool.name 'winget' 'blocked' 'winget not found; this tool would fail'; return }
         Add-Result $Tool.name 'winget' 'failed' 'winget not found. Install/update "App Installer" from the Microsoft Store (https://aka.ms/getwinget).'
         return
     }

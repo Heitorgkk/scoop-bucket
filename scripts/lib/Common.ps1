@@ -94,12 +94,14 @@ function Get-ToolProperty($Tool, [string] $Name, $Default = $null) {
 
 function Get-ScoopRoot {
     if ($env:SCOOP) { return $env:SCOOP }
-    return Join-Path $env:USERPROFILE 'scoop'
+    $userHome = if ($env:USERPROFILE) { $env:USERPROFILE } else { $HOME }
+    return Join-Path $userHome 'scoop'
 }
 
 function Get-ScoopGlobalRoot {
     if ($env:SCOOP_GLOBAL) { return $env:SCOOP_GLOBAL }
-    return Join-Path $env:ProgramData 'scoop'
+    if ($env:ProgramData) { return Join-Path $env:ProgramData 'scoop' }
+    return $null
 }
 
 function Split-ScoopReference([string] $Reference) {
