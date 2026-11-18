@@ -72,10 +72,19 @@ function Get-GroupTools {
         param([string] $Name, [string[]] $Path)
         if ($Path -contains $Name) { throw "Circular group include: $(($Path + $Name) -join ' -> ')" }
         $g = $Catalog.groups.$Name
+        $groupRequires = @()
+        if ($g.PSObject.Properties['requires']) { $groupRequires = @($g.requires) }
         if ($g.PSObject.Properties['tools']) {
             foreach ($t in $g.tools) {
                 if (-not $seen.ContainsKey($t.name)) {
                     $seen[$t.name] = $true
+                    # Tools inherit their group's prerequisites (e.g. plugins need main/claude-code).
+                    if ($groupRequires.Count) {
+                        $own = @()
+                        if ($t.PSObject.Properties['requires']) { $own = @($t.requires) }
+                        $t = $t.PSObject.Copy()
+                        $t | Add-Member -NotePropertyName requires -NotePropertyValue @(@($own) + $groupRequires | Select-Object -Unique) -Force
+                    }
                     $result.Add($t)
                 }
             }
@@ -86,6 +95,20 @@ function Get-GroupTools {
     }
     foreach ($name in $Group) { & $visit $name @() }
     return , $result.ToArray()
+}
+
+function Get-ClaudeConfigDir {
+    if ($env:CLAUDE_CONFIG_DIR) { return $env:CLAUDE_CONFIG_DIR }
+    $userHome = if ($env:USERPROFILE) { $env:USERPROFILE } else { $HOME }
+    return Join-Path $userHome '.claude'
+}
+
+function Get-OSArchitecture {
+    <# 'x64' or 'arm64' for the OS (not the current process). #>
+    $arch = $env:PROCESSOR_ARCHITEW6432
+    if (-not $arch) { $arch = $env:PROCESSOR_ARCHITECTURE }
+    if ($arch -eq 'ARM64') { return 'arm64' }
+    return 'x64'
 }
 
 function Get-ToolProperty($Tool, [string] $Name, $Default = $null) {
