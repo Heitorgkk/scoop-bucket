@@ -1,0 +1,35 @@
+name: Validate
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    # Weekly: catch upstream renames/removals in the official buckets.
+    - cron: '17 6 * * 1'
+
+permissions:
+  contents: read
+
+jobs:
+  manifests:
+    name: Manifests & catalog
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install jsonschema
+        run: python -m pip install --disable-pip-version-check jsonschema
+
+      - name: Validate JSON syntax
+        run: |
+          for f in groups.json bucket/*.json; do
+            python -m json.tool "$f" > /dev/null || { echo "::error file=$f::invalid JSON"; exit 1; }
+          done
+
+      - name: Validate catalog, schema and package references
+        run: python tools/catalog.py validate
