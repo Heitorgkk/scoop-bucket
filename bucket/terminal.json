@@ -1,6 +1,6 @@
 {
     "##": "Metapackage generated from groups.json by tools/catalog.py. Edit groups.json, not this file.",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "description": "Terminal and CLI tools: Windows Terminal, Oh My Posh, ripgrep, fastfetch, fzf, bat and lazygit.",
     "homepage": "https://github.com/Heitorgkk/scoop-bucket",
     "license": "Unlicense",

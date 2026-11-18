@@ -1,7 +1,7 @@
 {
     "##": "Metapackage generated from groups.json by tools/catalog.py. Edit groups.json, not this file.",
-    "version": "1.0.0",
-    "description": "Complete environment: every Heitorgkk group (main, ai, terminal, utilities).",
+    "version": "1.1.0",
+    "description": "Complete environment: every Heitorgkk group (main, ai, terminal, utilities, claude-extensions).",
     "homepage": "https://github.com/Heitorgkk/scoop-bucket",
     "license": "Unlicense",
     "url": "https://raw.githubusercontent.com/Heitorgkk/scoop-bucket/HEAD/meta/metapackage.txt",
@@ -10,13 +10,24 @@
         "Heitorgkk/main",
         "Heitorgkk/ai",
         "Heitorgkk/terminal",
-        "Heitorgkk/utilities"
+        "Heitorgkk/utilities",
+        "Heitorgkk/claude-extensions"
     ],
     "notes": [
-        "Heitorgkk/all (Complete Environment): main, ai, terminal, utilities.",
+        "Heitorgkk/all (Complete Environment): main, ai, terminal, utilities, claude-extensions.",
         "Not available through Scoop; install with scripts/install.ps1 -Group all:",
         "  claude-gui: winget Anthropic.Claude",
         "  gemini-cli: npm @google/gemini-cli",
-        "  chatgpt-gui: winget OpenAI.ChatGPT"
+        "  chatgpt-gui: winget OpenAI.ChatGPT",
+        "  commit-commands: claude-plugin commit-commands@claude-plugins-official",
+        "  feature-dev: claude-plugin feature-dev@claude-plugins-official",
+        "  code-review: claude-plugin code-review@claude-plugins-official",
+        "  pr-review-toolkit: claude-plugin pr-review-toolkit@claude-plugins-official",
+        "  security-guidance: claude-plugin security-guidance@claude-plugins-official",
+        "  claude-md-management: claude-plugin claude-md-management@claude-plugins-official",
+        "  skill-creator: claude-plugin skill-creator@claude-plugins-official",
+        "  frontend-design: claude-plugin frontend-design@claude-plugins-official",
+        "  document-skills: claude-plugin document-skills@anthropic-agent-skills",
+        "  scoop-windows: claude-skill claude/skills/scoop-windows"
     ]
 }
