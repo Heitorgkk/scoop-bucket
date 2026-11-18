@@ -28,9 +28,11 @@ BUCKET_DIR = ROOT / "bucket"
 README = ROOT / "README.md"
 PAYLOAD = ROOT / "meta" / "metapackage.txt"
 
-METAPACKAGE_VERSION = "1.1.0"
+METAPACKAGE_VERSION = "1.2.0"
 LICENSE = "Unlicense"
-SOURCES = {"scoop", "npm", "winget", "claude-plugin", "claude-skill"}
+SOURCES = {"scoop", "npm", "uv-tool", "winget", "claude-plugin", "claude-skill"}
+# Post-install configuration steps implemented in scripts/lib/Integrations.ps1.
+INTEGRATIONS = {"rtk", "graphify", "headroom-mcp", "msys2-rust"}
 DIRECT_ARCHS = {"x64", "arm64"}
 SCHEMA_URL = "https://raw.githubusercontent.com/ScoopInstaller/Scoop/master/schema.json"
 README_BEGIN = "<!-- BEGIN GENERATED TOOLS TABLE (tools/catalog.py generate) -->"
@@ -109,6 +111,8 @@ def source_label(t: dict) -> str:
         return f"Scoop `{t['package']}`"
     if t["source"] == "npm":
         return f"npm `{t['package']}`"
+    if t["source"] == "uv-tool":
+        return f"uv tool `{t['package']}`"
     if t["source"] == "claude-plugin":
         return f"Claude plugin `{t['package']}`"
     if t["source"] == "claude-skill":
@@ -185,6 +189,12 @@ def check_catalog(catalog: dict) -> list[str]:
                     errors.append(f"tool '{t['name']}': '{t['package']}' must be plugin@marketplace with a marketplace declared in 'claudeMarketplaces'")
             if src == "claude-skill":
                 errors += check_skill(t)
+            if t.get("integration") and t["integration"] not in INTEGRATIONS:
+                errors.append(f"tool '{t['name']}': unknown integration {t['integration']!r} (known: {', '.join(sorted(INTEGRATIONS))})")
+            if "python" in t and src != "uv-tool":
+                errors.append(f"tool '{t['name']}': 'python' is only supported for uv-tool tools")
+            if src == "uv-tool" and not t.get("command"):
+                errors.append(f"tool '{t['name']}': uv-tool tools need 'command' (used to detect installs outside uv)")
             if t.get("direct"):
                 errors += check_direct(t)
             refs = [t["package"]] if src == "scoop" else []
@@ -375,6 +385,13 @@ def check_online(catalog: dict) -> list[str]:
                             print(f"  ok   direct {t['name']} {arch} -> {resp.geturl()}")
                     except urllib.error.URLError as exc:
                         errors.append(f"tool '{t['name']}': direct {arch} URL {url} not reachable: {exc}")
+            if t["source"] == "uv-tool":
+                dist = t["package"].split("[", 1)[0]
+                try:
+                    meta = json.loads(http_get(f"https://pypi.org/pypi/{dist}/json"))
+                    print(f"  ok   pypi:{dist:<21} {meta['info'].get('version')}")
+                except (urllib.error.URLError, json.JSONDecodeError, KeyError) as exc:
+                    errors.append(f"tool '{t['name']}': PyPI package {dist} not reachable: {exc}")
             if t["source"] == "npm":
                 url = f"https://registry.npmjs.org/{t['package'].replace('/', '%2F')}/latest"
                 try:

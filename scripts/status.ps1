@@ -28,6 +28,7 @@ param(
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'lib\Common.ps1')
 . (Join-Path $PSScriptRoot 'lib\Tools.ps1')
+. (Join-Path $PSScriptRoot 'lib\Integrations.ps1')
 
 try {
     if ($CatalogPath) { $catalog = Get-Catalog -Path $CatalogPath } else { $catalog = Get-Catalog }
@@ -47,6 +48,12 @@ try {
             $ok = $false
             try { $ok = Test-ToolInstalled $tool $repoRoot } catch { $ok = $false }
             [pscustomobject]@{ Group = $g; Tool = $tool.name; Source = $tool.source; Package = $tool.package; Installed = $(if ($ok) { 'yes' } else { 'NO' }) }
+            if ($ok -and (Get-ToolProperty $tool 'integration')) {
+                $state = try { (Get-IntegrationState $tool).State } catch { 'missing' }
+                # 'blocked' (e.g. x64-only setup on ARM64) is not something install.ps1 can fix: not counted as missing.
+                $mark = switch ($state) { 'configured' { 'yes' } 'blocked' { 'n/a' } default { 'NO' } }
+                [pscustomobject]@{ Group = $g; Tool = "$($tool.name) integration"; Source = 'integration'; Package = $tool.integration; Installed = $mark }
+            }
         }
         $meta = Test-ScoopApp $g
         [pscustomobject]@{ Group = $g; Tool = "$($catalog.bucket.name)/$g"; Source = 'scoop'; Package = 'metapackage'; Installed = $(if ($meta) { 'yes' } else { 'NO' }) }

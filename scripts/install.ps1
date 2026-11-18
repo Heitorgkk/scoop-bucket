@@ -11,11 +11,15 @@
        (or upgrading them with -Update):
          - Scoop packages with 'scoop install bucket/app'
          - npm packages with 'npm install -g' (installs main/nodejs-lts first if npm is missing)
+         - Python CLIs with 'uv tool install' (skipped when the command already exists outside uv)
          - Claude Code skills by copying them to ~/.claude/skills
          - Claude Code plugins with 'claude plugin install' (adds the marketplace first)
          - desktop apps with 'winget install --exact --source winget'; when WinGet is missing,
            blocked, fails, or -NoWinGet is given, the vendor's signed MSIX is downloaded and
            installed per user with Add-AppxPackage
+       Then runs each tool's 'integration' (scripts/lib/Integrations.ps1) when it is not configured yet:
+       'rtk init -g', 'graphify install', 'headroom mcp install --agent claude' and the MSYS2 +
+       Rust GNU toolchain setup. ANTHROPIC_BASE_URL is checked to be unchanged afterwards.
     4. Registers the Heitorgkk/<group> metapackage, so 'scoop update <group>' later
        picks up tools added to the group.
     5. Prints a summary and exits with 0 (all good), 1 (some tool failed) or 2
@@ -25,13 +29,13 @@
 
 .PARAMETER Group
     One or more groups. See groups.json; currently: main, ai, terminal, utilities,
-    claude-extensions, all.
+    claude-extensions, claude-tools, all.
 
 .PARAMETER Update
     Upgrade tools that are already installed instead of skipping them.
 
 .PARAMETER ScoopOnly
-    Only handle Scoop packages; skip npm, desktop apps and Claude plugins/skills.
+    Only handle Scoop packages; skip npm, uv tools, desktop apps, Claude plugins/skills and integrations.
 
 .PARAMETER NoWinGet
     Never use WinGet: install desktop apps from the vendor's official MSIX instead.
@@ -68,6 +72,7 @@ param(
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'lib\Common.ps1')
 . (Join-Path $PSScriptRoot 'lib\Tools.ps1')
+. (Join-Path $PSScriptRoot 'lib\Integrations.ps1')
 
 # WinGet exit codes that mean "nothing to do" rather than failure.
 $WINGET_NO_UPDATE = -1978335189          # 0x8A15002B  no applicable upgrade
@@ -78,7 +83,7 @@ function Add-Result([string] $Name, [string] $Source, [string] $Status, [string]
     $results.Add([pscustomobject]@{ Tool = $Name; Source = $Source; Status = $Status; Detail = $Detail })
     switch ($Status) {
         'failed' { Write-Fail "$Name - $Detail" }
-        { $_ -in 'installed', 'updated' } { Write-Ok "$Name $Status." }
+        { $_ -in 'installed', 'updated', 'configured' } { Write-Ok "$Name $Status." }
         default { Write-Skip "$Name - $Status$(if ($Detail) { " ($Detail)" })" }
     }
 }
@@ -130,6 +135,46 @@ function Invoke-NpmTool($Tool) {
     } else {
         Add-Result $Tool.name 'npm' 'failed' "npm exited with $code"
     }
+}
+
+# ---------------------------------------------------------------------------- uv tools
+
+function Invoke-UvTool($Tool) {
+    if (-not (Get-UvCommand)) {
+        if ($DryRun) { Add-Result $Tool.name 'uv-tool' 'would install' "after: $((Get-MissingPrerequisite $Tool) -join ', ')"; return }
+        Install-Prerequisite $Tool
+        if (-not (Get-UvCommand)) { Add-Result $Tool.name 'uv-tool' 'failed' 'uv not found (prerequisite: main/uv)'; return }
+    }
+    $state = Get-UvToolState $Tool
+    if ($state -eq 'external') {
+        # Installed by pip or another manager: never install a second copy that would shadow it on PATH.
+        $where = (Get-Command $Tool.command -CommandType Application | Select-Object -First 1).Source
+        $note = if ($Update) { "not managed by uv ($where); update it with the tool that installed it" } else { "not managed by uv ($where)" }
+        Add-Result $Tool.name 'uv-tool' 'already installed' $note
+        return
+    }
+    $installed = ($state -eq 'uv')
+    if ($installed -and -not $Update) { Add-Result $Tool.name 'uv-tool' 'already installed' $Tool.package; return }
+    if ($DryRun) { Add-Result $Tool.name 'uv-tool' $(if ($installed) { 'would update' } else { 'would install' }) $Tool.package; return }
+    Add-Result $Tool.name 'uv-tool' (Install-UvTool $Tool $state) $Tool.package
+}
+
+# ---------------------------------------------------------------------------- integrations (post-install configuration)
+
+function Invoke-ToolIntegration($Tool) {
+    $label = "$($Tool.name) integration"
+    $id = $Tool.integration
+    if (-not (Test-ToolInstalled $Tool $repoRoot)) {
+        Add-Result $label 'integration' $(if ($DryRun) { 'would configure' } else { 'skipped' }) "$id (after $($Tool.name) is installed)"
+        return
+    }
+    $state = Get-IntegrationState $Tool
+    if ($state.State -eq 'blocked') { Add-Result $label 'integration' 'skipped' $state.Detail; return }
+    $rerun = $Update -and (Test-IntegrationRerunOnUpdate $Tool)
+    if ($state.State -eq 'configured' -and -not $rerun) { Add-Result $label 'integration' 'already configured' $state.Detail; return }
+    if ($DryRun) { Add-Result $label 'integration' $(if ($state.State -eq 'configured') { 'would refresh' } else { 'would configure' }) "$id - $($state.Detail)"; return }
+    $status = Invoke-Integration $Tool $rerun
+    Add-Result $label 'integration' $status (Get-IntegrationState $Tool).Detail
 }
 
 # ---------------------------------------------------------------------------- desktop apps (WinGet / MSIX)
@@ -185,6 +230,9 @@ function Invoke-ClaudePluginTool($Tool) {
     $installed = Test-ClaudePluginTool $Tool
     if ($installed -and -not $Update) { Add-Result $Tool.name 'claude-plugin' 'already installed' $Tool.package; return }
     if ($DryRun) { Add-Result $Tool.name 'claude-plugin' $(if ($installed) { 'would update' } else { 'would install' }) $Tool.package; return }
+    # Runtime prerequisites of the plugin itself (e.g. Node.js for an MCP server), when not already on PATH.
+    $runtime = @(Get-MissingPrerequisite $Tool | Where-Object { $_ -eq 'main/nodejs-lts' })
+    if ($runtime.Count -and -not (Test-Command node)) { Install-Prerequisite $Tool }
     Add-Result $Tool.name 'claude-plugin' (Install-ClaudePlugin $Tool $catalog $installed) $Tool.package
 }
 
@@ -262,7 +310,7 @@ try {
     }
 
     # Scoop first (nodejs/claude-code must exist before npm tools and plugins), then the rest.
-    $order = 'scoop', 'npm', 'claude-skill', 'claude-plugin', 'winget'
+    $order = 'scoop', 'npm', 'uv-tool', 'claude-skill', 'claude-plugin', 'winget'
     $tools = @(foreach ($src in $order) { $tools | Where-Object { $_.source -eq $src } })
     $i = 0
     foreach ($tool in $tools) {
@@ -272,6 +320,7 @@ try {
             switch ($tool.source) {
                 'scoop' { Invoke-ScoopTool $tool }
                 'npm' { Invoke-NpmTool $tool }
+                'uv-tool' { Invoke-UvTool $tool }
                 'winget' { Invoke-DesktopTool $tool }
                 'claude-plugin' { Invoke-ClaudePluginTool $tool }
                 'claude-skill' { Invoke-ClaudeSkillTool $tool }
@@ -281,6 +330,22 @@ try {
             Add-Result $tool.name $tool.source 'failed' $_.Exception.Message
         }
         if (-not $DryRun) { Update-SessionPath }
+    }
+
+    # Integrations run after every tool, so e.g. msys2-rust finds rustup and rtk finds Claude Code.
+    $integrated = @(if (-not $ScoopOnly) { $tools | Where-Object { Get-ToolProperty $_ 'integration' } })
+    if ($integrated.Count) {
+        Write-Section "Configuring $($integrated.Count) integration(s)"
+        $baseUrlBefore = Get-AnthropicBaseUrl
+        foreach ($tool in $integrated) {
+            try { Invoke-ToolIntegration $tool } catch { Add-Result "$($tool.name) integration" 'integration' 'failed' $_.Exception.Message }
+            if (-not $DryRun) { Update-SessionPath }
+        }
+        # Guard: no step of this pipeline may route Claude Code through a proxy.
+        $baseUrlAfter = Get-AnthropicBaseUrl
+        if ((Format-AnthropicBaseUrl $baseUrlBefore) -ne (Format-AnthropicBaseUrl $baseUrlAfter)) {
+            Add-Result 'ANTHROPIC_BASE_URL' 'integration' 'failed' "changed during setup: $(Format-AnthropicBaseUrl $baseUrlBefore) -> $(Format-AnthropicBaseUrl $baseUrlAfter); revert it"
+        }
     }
 
     Write-Section 'Registering metapackages'

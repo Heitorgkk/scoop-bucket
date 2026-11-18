@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Per-source detection and installation helpers (Scoop, npm, WinGet, direct MSIX,
+    Per-source detection and installation helpers (Scoop, npm, uv tools, WinGet, direct MSIX,
     Claude Code plugins and skills). Dot-source after Common.ps1.
 .NOTES
     Test-* functions only read state and are shared by install.ps1 and status.ps1.
@@ -56,6 +56,78 @@ function Test-NpmTool($Tool) {
     $npm = Get-NpmCommand
     if (-not $npm) { return $false }
     return ((Invoke-Native $npm @('ls', '--global', '--depth=0', $Tool.package)).Code -eq 0)
+}
+
+# ---------------------------------------------------------------------------- uv tools (Python CLIs)
+
+function Sync-UvEnvironment {
+    <# main/uv stores UV_TOOL_DIR etc. in the user environment; a shell opened before uv was installed lacks
+       them, and uv would then look for (and install) tools in ~\.local\bin instead. #>
+    if (-not (Test-IsWindows)) { return }
+    foreach ($name in 'UV_TOOL_DIR', 'UV_TOOL_BIN_DIR', 'UV_PYTHON_INSTALL_DIR', 'UV_PYTHON_BIN_DIR', 'UV_CACHE_DIR') {
+        $value = [Environment]::GetEnvironmentVariable($name, 'User')
+        if ($value -and -not [Environment]::GetEnvironmentVariable($name, 'Process')) { Set-Item -Path "Env:$name" -Value $value }
+    }
+    $bin = $env:UV_TOOL_BIN_DIR
+    if ($bin -and -not (@($env:Path.Split(';')) -contains $bin)) { $env:Path = "$env:Path;$bin" }
+}
+
+function Get-UvCommand {
+    Sync-UvEnvironment
+    $cmd = Get-Command 'uv.exe', 'uv' -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($cmd) { return $cmd.Source }
+    return $null
+}
+
+function Get-UvDistributionName($Tool) {
+    <# 'headroom-ai[mcp]' -> 'headroom-ai' (the name 'uv tool list/upgrade' use). #>
+    return ($Tool.package -split '\[', 2)[0].Trim().ToLowerInvariant()
+}
+
+$script:UvTools = $null
+function Get-UvToolNames([switch] $Refresh) {
+    if ($Refresh -or $null -eq $script:UvTools) {
+        $script:UvTools = @()
+        $uv = Get-UvCommand
+        if ($uv) {
+            # Lines look like 'headroom-ai v0.44.0'; executables follow as '- name'.
+            $r = Invoke-Native $uv @('tool', 'list')
+            if ($r.Code -eq 0) {
+                $script:UvTools = @($r.Out | Where-Object { $_ -match '^\S+\s+v\d' } | ForEach-Object { ($_ -split '\s+')[0].ToLowerInvariant() })
+            }
+        }
+    }
+    return $script:UvTools
+}
+
+function Get-UvToolState($Tool) {
+    <# 'uv' (managed by uv), 'external' (command on PATH from another installer, e.g. pip) or 'missing'. #>
+    if ((Get-UvToolNames) -contains (Get-UvDistributionName $Tool)) { return 'uv' }
+    $cmd = Get-ToolProperty $Tool 'command'
+    if ($cmd -and (Get-Command $cmd -CommandType Application -ErrorAction SilentlyContinue)) { return 'external' }
+    return 'missing'
+}
+
+function Install-UvTool($Tool, [string] $State) {
+    $uv = Get-UvCommand
+    if (-not $uv) { throw 'uv not found (install main/uv)' }
+    if ($State -eq 'uv') {
+        $name = Get-UvDistributionName $Tool
+        Write-Info "uv tool upgrade $name"
+        & $uv tool upgrade $name | Out-Host
+        if ($LASTEXITCODE -ne 0) { throw "uv tool upgrade exited with $LASTEXITCODE" }
+        return 'updated'
+    }
+    $uvArgs = @('tool', 'install')
+    $python = Get-ToolProperty $Tool 'python'
+    if ($python) { $uvArgs += @('--python', $python) }   # uv downloads a managed Python when it is missing
+    $uvArgs += $Tool.package
+    Write-Info "uv $($uvArgs -join ' ')"
+    & $uv @uvArgs | Out-Host
+    $code = $LASTEXITCODE
+    $null = Get-UvToolNames -Refresh
+    if ($code -ne 0 -or (Get-UvToolState $Tool) -ne 'uv') { throw "uv tool install exited with $code" }
+    return 'installed'
 }
 
 # ---------------------------------------------------------------------------- WinGet
@@ -277,6 +349,7 @@ function Test-ToolInstalled($Tool, [string] $RepoRoot) {
     switch ($Tool.source) {
         'scoop' { return (Test-ScoopApp (Split-ScoopReference $Tool.package).App) }
         'npm' { return (Test-NpmTool $Tool) }
+        'uv-tool' { return ((Get-UvToolState $Tool) -ne 'missing') }
         'winget' { return (Test-DesktopTool $Tool) }
         'claude-plugin' { return (Test-ClaudePluginTool $Tool) }
         'claude-skill' { return ((Get-SkillState $Tool $RepoRoot) -ne 'missing') }

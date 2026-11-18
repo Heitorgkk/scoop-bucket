@@ -179,7 +179,9 @@ function Update-SessionPath {
         if ($p -and -not $entries.Contains($p)) { $entries.Add($p) }
     }
     $env:Path = $entries -join ';'
-    foreach ($name in 'JAVA_HOME', 'CARGO_HOME', 'RUSTUP_HOME') {
+    # main/uv points its tool/Python dirs into ~\scoop\persist\uv; without these a fresh session
+    # would install uv tools into ~\.local\bin, which is not on PATH.
+    foreach ($name in 'JAVA_HOME', 'CARGO_HOME', 'RUSTUP_HOME', 'UV_TOOL_DIR', 'UV_TOOL_BIN_DIR', 'UV_PYTHON_INSTALL_DIR', 'UV_PYTHON_BIN_DIR', 'UV_CACHE_DIR') {
         $value = [Environment]::GetEnvironmentVariable($name, 'User')
         if ($value) { Set-Item -Path "Env:$name" -Value $value }
     }
