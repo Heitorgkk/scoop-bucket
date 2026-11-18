@@ -64,6 +64,7 @@ function Get-GroupNames($Catalog) {
 
 function Get-GroupTools {
     <# Returns the tools of one or more groups, expanding 'includes' and removing duplicates (first wins). #>
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSReviewUnusedParameter', 'Catalog', Justification = 'Used inside the $visit script block.')]
     param($Catalog, [string[]] $Group)
     $seen = @{}
     $result = New-Object System.Collections.Generic.List[object]

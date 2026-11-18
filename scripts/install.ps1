@@ -43,18 +43,10 @@
 .EXAMPLE
     .\scripts\install.ps1 -Group all -Update
 #>
+[Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSReviewUnusedParameter', 'Update', Justification = 'Read by the helper functions in script scope.')]
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true, Position = 0)]
-    [ArgumentCompleter({
-            param($cmd, $param, $word)
-            try {
-                $scriptPath = (Get-Command $cmd -ErrorAction Stop).Source
-                $file = Join-Path (Split-Path -Parent (Split-Path -Parent $scriptPath)) 'groups.json'
-                (Get-Content $file -Raw | ConvertFrom-Json).groups.PSObject.Properties |
-                    ForEach-Object { $_.Name } | Where-Object { $_ -like "$word*" }
-            } catch { }
-        })]
     [string[]] $Group,
     [switch] $Update,
     [switch] $ScoopOnly,
