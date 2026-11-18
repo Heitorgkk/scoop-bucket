@@ -1,0 +1,16 @@
+# OS / editor
+Thumbs.db
+Desktop.ini
+.DS_Store
+.vscode/
+.idea/
+*.swp
+
+# Python tooling caches
+__pycache__/
+*.pyc
+.venv/
+
+# Local test output
+*.log
+/.cache/
