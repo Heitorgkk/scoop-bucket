@@ -33,3 +33,105 @@ jobs:
 
       - name: Validate catalog, schema and package references
         run: python tools/catalog.py validate
+
+  lint:
+    name: PowerShell lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: PSScriptAnalyzer
+        shell: pwsh
+        run: |
+          Set-PSRepository PSGallery -InstallationPolicy Trusted
+          Install-Module PSScriptAnalyzer -Scope CurrentUser -Force
+          $issues = Invoke-ScriptAnalyzer -Path scripts, tests -Recurse -Settings ./PSScriptAnalyzerSettings.psd1
+          $issues | Format-Table -AutoSize RuleName, Severity, ScriptName, Line, Message | Out-String -Width 300 | Write-Host
+          if ($issues) { exit 1 }
+
+  script-tests:
+    name: Script tests (${{ matrix.shell }})
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shell: [pwsh, powershell]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Argument validation, exit codes and dry runs
+        shell: pwsh
+        run: ./tests/Test-Scripts.ps1 -Shell ${{ matrix.shell }}
+
+  scoop-install:
+    # Real installation through Scoop only: 'scoop install Heitorgkk/all'.
+    name: scoop install Heitorgkk/all
+    needs: [manifests, script-tests]
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Scoop
+        shell: pwsh
+        run: ./tests/ci/Install-ScoopForCI.ps1
+      - name: Add buckets (bootstrap.ps1 with this checkout as the Heitorgkk bucket)
+        shell: pwsh
+        run: |
+          ./scripts/bootstrap.ps1 -BucketSource $env:GITHUB_WORKSPACE
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          # second run must be a no-op
+          ./scripts/bootstrap.ps1 -BucketSource $env:GITHUB_WORKSPACE
+          exit $LASTEXITCODE
+      - name: scoop install Heitorgkk/all
+        shell: pwsh
+        run: scoop install Heitorgkk/all
+      - name: Verify every Scoop package and metapackage is installed
+        shell: pwsh
+        run: ./tests/ci/Assert-Installed.ps1 -Group all
+      - name: Re-running is a no-op
+        shell: pwsh
+        run: |
+          $out = scoop install Heitorgkk/all 6>&1 2>&1 | Out-String
+          Write-Host $out
+          if ($out -notmatch 'already installed') { throw 'expected "already installed"' }
+      - name: scoop update of a metapackage
+        shell: pwsh
+        run: |
+          scoop update all
+          ./tests/ci/Assert-Installed.ps1 -Group all
+
+  script-install:
+    # Real installation through scripts/install.ps1 (Scoop + npm + WinGet) under Windows PowerShell 5.1.
+    name: install.ps1 -Group ai,terminal
+    needs: [manifests, script-tests]
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Scoop
+        shell: pwsh
+        run: ./tests/ci/Install-ScoopForCI.ps1
+      - name: Tool availability
+        shell: pwsh
+        run: |
+          Get-Command winget, npm, node -ErrorAction SilentlyContinue | Format-Table Name, Source, Version
+          winget --version
+      - name: install.ps1 -Group ai,terminal
+        shell: powershell
+        run: |
+          .\scripts\install.ps1 -Group ai,terminal -BucketSource $env:GITHUB_WORKSPACE
+          "exit=$LASTEXITCODE" | Out-File -FilePath "$env:RUNNER_TEMP\install-exit.txt"
+          exit 0
+      - name: Verify
+        shell: pwsh
+        run: |
+          Write-Host (Get-Content "$env:RUNNER_TEMP\install-exit.txt")
+          ./tests/ci/Assert-Installed.ps1 -Group ai,terminal -External
+      - name: Second run skips everything
+        shell: powershell
+        run: |
+          .\scripts\install.ps1 -Group ai,terminal -BucketSource $env:GITHUB_WORKSPACE
+          exit $LASTEXITCODE
+      - name: -Update upgrades in place
+        shell: powershell
+        run: |
+          .\scripts\install.ps1 -Group ai -Update -BucketSource $env:GITHUB_WORKSPACE
+          exit $LASTEXITCODE
