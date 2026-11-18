@@ -2,7 +2,7 @@
 <#
 .SYNOPSIS
     Asserts that every tool of the given group(s) is installed, plus the matching
-    Heitorgkk metapackages. With -External, npm and WinGet tools are checked too.
+    Heitorgkk metapackages. With -External, npm, desktop apps and Claude plugins/skills are checked too.
 #>
 [CmdletBinding()]
 param(
@@ -12,6 +12,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 . (Join-Path (Join-Path $repo 'scripts') (Join-Path 'lib' 'Common.ps1'))
+. (Join-Path (Join-Path $repo 'scripts') (Join-Path 'lib' 'Tools.ps1'))
 
 $catalog = Get-Catalog
 $Group = @($Group | ForEach-Object { $_ -split ',' } | Where-Object { $_ })
@@ -37,26 +38,10 @@ while ($queue.Count) {
 foreach ($m in $metas) { Test-Item "metapackage $($catalog.bucket.name)/$m" (Test-ScoopApp $m) }
 
 foreach ($tool in (Get-GroupTools -Catalog $catalog -Group $Group)) {
-    switch ($tool.source) {
-        'scoop' {
-            $app = (Split-ScoopReference $tool.package).App
-            Test-Item "scoop  $($tool.package)" (Test-ScoopApp $app)
-            $cmd = Get-ToolProperty $tool 'command'
-            if ($cmd) { Test-Item "  command '$cmd'" ([bool](Get-Command $cmd -ErrorAction SilentlyContinue)) }
-        }
-        'npm' {
-            if (-not $External) { continue }
-            & npm.cmd ls --global --depth=0 $tool.package | Out-Host
-            Test-Item "npm    $($tool.package)" ($LASTEXITCODE -eq 0)
-            $cmd = Get-ToolProperty $tool 'command'
-            if ($cmd) { Test-Item "  command '$cmd'" ([bool](Get-Command $cmd -ErrorAction SilentlyContinue)) }
-        }
-        'winget' {
-            if (-not $External) { continue }
-            & winget list --id $tool.package --exact --accept-source-agreements --disable-interactivity | Out-Host
-            Test-Item "winget $($tool.package)" ($LASTEXITCODE -eq 0)
-        }
-    }
+    if ($tool.source -ne 'scoop' -and -not $External) { continue }
+    Test-Item ("{0,-13} {1}" -f $tool.source, $tool.package) (Test-ToolInstalled $tool $repo)
+    $cmd = Get-ToolProperty $tool 'command'
+    if ($cmd) { Test-Item "  command '$cmd'" ([bool](Get-Command $cmd -ErrorAction SilentlyContinue)) }
 }
 
 if ($failed.Count) { Write-Host "$($failed.Count) missing: $($failed -join ', ')" -ForegroundColor Red; exit 1 }

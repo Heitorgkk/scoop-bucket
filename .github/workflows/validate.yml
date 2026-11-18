@@ -46,7 +46,7 @@ jobs:
             Set-PSRepository PSGallery -InstallationPolicy Trusted
             Install-Module PSScriptAnalyzer -Scope CurrentUser -Force
           }
-          $issues = foreach ($dir in 'scripts', 'tests') {
+          $issues = foreach ($dir in 'scripts', 'tests', 'setup.ps1') {
             Invoke-ScriptAnalyzer -Path $dir -Recurse -Settings ./PSScriptAnalyzerSettings.psd1
           }
           $issues | Format-Table -AutoSize RuleName, Severity, ScriptName, Line, Message | Out-String -Width 300 | Write-Host
@@ -138,4 +138,47 @@ jobs:
         shell: powershell
         run: |
           .\scripts\install.ps1 -Group ai -Update -BucketSource $env:GITHUB_WORKSPACE
+          exit $LASTEXITCODE
+
+  setup-no-winget:
+    # setup.ps1 as run by 'irm | iex' (script block), forcing the WinGet-free MSIX route,
+    # plus Claude Code plugins and skills, under PowerShell 7.
+    name: setup.ps1 -NoWinGet + claude-extensions
+    needs: [manifests, script-tests]
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install Scoop
+        shell: pwsh
+        run: ./tests/ci/Install-ScoopForCI.ps1
+      - name: setup.ps1 -Group ai,claude-extensions -NoWinGet
+        shell: pwsh
+        run: |
+          & ([scriptblock]::Create((Get-Content ./setup.ps1 -Raw))) -Group ai,claude-extensions -NoWinGet -SourcePath $env:GITHUB_WORKSPACE -BucketSource $env:GITHUB_WORKSPACE
+          "exit=$LASTEXITCODE" | Out-File -FilePath "$env:RUNNER_TEMP\setup-exit.txt"
+          exit 0
+      - name: Verify (desktop apps must be MSIX packages, not WinGet installs)
+        shell: pwsh
+        run: |
+          Write-Host (Get-Content "$env:RUNNER_TEMP\setup-exit.txt")
+          Import-Module Appx -UseWindowsPowerShell -WarningAction SilentlyContinue
+          Get-AppxPackage -Name Claude, OpenAI.Codex | Format-Table Name, Version, Publisher
+          if (-not (Get-AppxPackage -Name Claude)) { throw 'Claude MSIX not registered' }
+          if (-not (Get-AppxPackage -Name OpenAI.Codex)) { throw 'ChatGPT MSIX not registered' }
+          ./tests/ci/Assert-Installed.ps1 -Group ai,claude-extensions -External
+      - name: status.ps1
+        shell: pwsh
+        run: |
+          ./scripts/status.ps1 -Group ai,claude-extensions
+          exit $LASTEXITCODE
+      - name: Second run skips everything
+        shell: pwsh
+        run: |
+          ./scripts/install.ps1 -Group ai,claude-extensions -NoWinGet -BucketSource $env:GITHUB_WORKSPACE
+          exit $LASTEXITCODE
+      - name: -Update (MSIX, plugins, skills)
+        shell: pwsh
+        run: |
+          ./scripts/install.ps1 -Group ai,claude-extensions -NoWinGet -Update -BucketSource $env:GITHUB_WORKSPACE
           exit $LASTEXITCODE
