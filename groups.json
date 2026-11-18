@@ -1,0 +1,243 @@
+{
+    "$comment": "Single source of truth for the Heitorgkk bucket. bucket/*.json, scripts/install.ps1 and the README tool table are derived from / validated against this file. Run 'python tools/catalog.py generate' after editing.",
+    "bucket": {
+        "name": "Heitorgkk",
+        "url": "https://github.com/Heitorgkk/scoop-bucket"
+    },
+    "buckets": {
+        "main": "https://github.com/ScoopInstaller/Main",
+        "extras": "https://github.com/ScoopInstaller/Extras",
+        "java": "https://github.com/ScoopInstaller/Java"
+    },
+    "groups": {
+        "main": {
+            "title": "Essential Development Tools",
+            "description": "Essential development tools: GitHub CLI, Git, Node.js LTS, Temurin JDK LTS, rustup and Docker CLI/Engine.",
+            "tools": [
+                {
+                    "name": "gh",
+                    "source": "scoop",
+                    "package": "main/gh",
+                    "command": "gh",
+                    "summary": "GitHub CLI",
+                    "homepage": "https://cli.github.com/"
+                },
+                {
+                    "name": "git",
+                    "source": "scoop",
+                    "package": "main/git",
+                    "command": "git",
+                    "summary": "Git for Windows (portable)",
+                    "homepage": "https://gitforwindows.org/"
+                },
+                {
+                    "name": "nodejs",
+                    "source": "scoop",
+                    "package": "main/nodejs-lts",
+                    "command": "node",
+                    "summary": "Node.js, current LTS line (includes npm)",
+                    "homepage": "https://nodejs.org/"
+                },
+                {
+                    "name": "jdk",
+                    "source": "scoop",
+                    "package": "java/temurin-lts-jdk",
+                    "command": "java",
+                    "summary": "Eclipse Temurin JDK, latest LTS (sets JAVA_HOME)",
+                    "homepage": "https://adoptium.net/",
+                    "requirements": "x64 build only; runs under emulation on Windows 11 ARM64."
+                },
+                {
+                    "name": "rustup",
+                    "source": "scoop",
+                    "package": "main/rustup",
+                    "command": "rustup",
+                    "summary": "Rust toolchain manager (MSVC host by default)",
+                    "homepage": "https://rustup.rs/",
+                    "requirements": "The MSVC toolchain needs Microsoft C++ Build Tools (MSVC + Windows SDK), installed separately."
+                },
+                {
+                    "name": "docker",
+                    "source": "scoop",
+                    "package": "main/docker",
+                    "command": "docker",
+                    "summary": "Docker CLI + Docker Engine (dockerd) for Windows containers. NOT Docker Desktop",
+                    "homepage": "https://www.docker.com/",
+                    "requirements": "dockerd only runs Windows containers and needs the Windows 'Containers' feature; registering the service (dockerd --register-service) needs an elevated shell. The CLI can talk to any remote/WSL Linux engine. x64 only."
+                }
+            ]
+        },
+        "ai": {
+            "title": "AI & Coding Agents",
+            "description": "AI coding agents and assistants: Claude Code, Codex CLI and OpenCode CLI (Claude Desktop, ChatGPT Desktop and Gemini CLI are installed by scripts/install.ps1).",
+            "tools": [
+                {
+                    "name": "claude-code",
+                    "source": "scoop",
+                    "package": "main/claude-code",
+                    "command": "claude",
+                    "summary": "Claude Code CLI (official Anthropic native binary)",
+                    "homepage": "https://code.claude.com/",
+                    "requirements": "Needs Git for Windows (Git Bash); provided by the main group."
+                },
+                {
+                    "name": "claude-gui",
+                    "source": "winget",
+                    "package": "Anthropic.Claude",
+                    "summary": "Claude Desktop, official Anthropic installer",
+                    "homepage": "https://claude.com/download",
+                    "requirements": "WinGet (App Installer). Windows 10 2004 (19041) or later."
+                },
+                {
+                    "name": "gemini-cli",
+                    "source": "npm",
+                    "package": "@google/gemini-cli",
+                    "command": "gemini",
+                    "summary": "Google Gemini CLI (official npm package)",
+                    "homepage": "https://github.com/google-gemini/gemini-cli",
+                    "requirements": "Node.js 20+ / npm. install.ps1 installs main/nodejs-lts first when npm is missing.",
+                    "requires": ["main/nodejs-lts"]
+                },
+                {
+                    "name": "codex",
+                    "source": "scoop",
+                    "package": "main/codex",
+                    "command": "codex",
+                    "summary": "OpenAI Codex CLI",
+                    "homepage": "https://github.com/openai/codex"
+                },
+                {
+                    "name": "chatgpt-gui",
+                    "source": "winget",
+                    "package": "OpenAI.ChatGPT",
+                    "summary": "ChatGPT Desktop, official OpenAI MSIX",
+                    "homepage": "https://chatgpt.com/download",
+                    "requirements": "WinGet (App Installer). Windows 10 2004 (19041) or later."
+                },
+                {
+                    "name": "opencode",
+                    "source": "scoop",
+                    "package": "main/opencode",
+                    "command": "opencode",
+                    "summary": "OpenCode CLI (v2; not the desktop app)",
+                    "homepage": "https://opencode.ai/",
+                    "requirements": "v2 config is incompatible with v1; see https://opencode.ai/docs/migrate-v1/."
+                }
+            ]
+        },
+        "terminal": {
+            "title": "Terminal & CLI",
+            "description": "Terminal and CLI tools: Windows Terminal, Oh My Posh, ripgrep, fastfetch, fzf, bat and lazygit.",
+            "tools": [
+                {
+                    "name": "windows-terminal",
+                    "source": "scoop",
+                    "package": "extras/windows-terminal",
+                    "command": "wt",
+                    "summary": "Windows Terminal (portable)",
+                    "homepage": "https://github.com/microsoft/terminal"
+                },
+                {
+                    "name": "oh-my-posh",
+                    "source": "scoop",
+                    "package": "main/oh-my-posh",
+                    "command": "oh-my-posh",
+                    "summary": "Prompt theme engine",
+                    "homepage": "https://ohmyposh.dev/",
+                    "requirements": "Enable it in your shell profile; see https://ohmyposh.dev/docs/installation/prompt. A Nerd Font is recommended."
+                },
+                {
+                    "name": "ripgrep",
+                    "source": "scoop",
+                    "package": "main/ripgrep",
+                    "command": "rg",
+                    "summary": "Fast recursive text search",
+                    "homepage": "https://github.com/BurntSushi/ripgrep"
+                },
+                {
+                    "name": "fastfetch",
+                    "source": "scoop",
+                    "package": "main/fastfetch",
+                    "command": "fastfetch",
+                    "summary": "System information tool",
+                    "homepage": "https://github.com/fastfetch-cli/fastfetch"
+                },
+                {
+                    "name": "fzf",
+                    "source": "scoop",
+                    "package": "main/fzf",
+                    "command": "fzf",
+                    "summary": "Command-line fuzzy finder",
+                    "homepage": "https://github.com/junegunn/fzf"
+                },
+                {
+                    "name": "bat",
+                    "source": "scoop",
+                    "package": "main/bat",
+                    "command": "bat",
+                    "summary": "cat clone with syntax highlighting",
+                    "homepage": "https://github.com/sharkdp/bat"
+                },
+                {
+                    "name": "lazygit",
+                    "source": "scoop",
+                    "package": "extras/lazygit",
+                    "command": "lazygit",
+                    "summary": "Terminal UI for git",
+                    "homepage": "https://github.com/jesseduffield/lazygit"
+                }
+            ]
+        },
+        "utilities": {
+            "title": "Windows Utilities",
+            "description": "Windows utilities: Everything, PowerToys, ShareX, 7-Zip and LocalSend.",
+            "tools": [
+                {
+                    "name": "everything",
+                    "source": "scoop",
+                    "package": "extras/everything",
+                    "command": "everything",
+                    "summary": "Instant file search by name",
+                    "homepage": "https://www.voidtools.com/"
+                },
+                {
+                    "name": "powertoys",
+                    "source": "scoop",
+                    "package": "extras/powertoys",
+                    "summary": "Microsoft PowerToys",
+                    "homepage": "https://github.com/microsoft/PowerToys"
+                },
+                {
+                    "name": "sharex",
+                    "source": "scoop",
+                    "package": "extras/sharex",
+                    "command": "sharex",
+                    "summary": "Screenshot and screen capture",
+                    "homepage": "https://getsharex.com/",
+                    "requirements": "x64 build only; runs under emulation on Windows 11 ARM64."
+                },
+                {
+                    "name": "7zip",
+                    "source": "scoop",
+                    "package": "main/7zip",
+                    "command": "7z",
+                    "summary": "File archiver",
+                    "homepage": "https://www.7-zip.org/"
+                },
+                {
+                    "name": "localsend",
+                    "source": "scoop",
+                    "package": "extras/localsend",
+                    "command": "localsend",
+                    "summary": "Local network file sharing",
+                    "homepage": "https://localsend.org/"
+                }
+            ]
+        },
+        "all": {
+            "title": "Complete Environment",
+            "description": "Complete environment: every Heitorgkk group (main, ai, terminal, utilities).",
+            "includes": ["main", "ai", "terminal", "utilities"]
+        }
+    }
+}
