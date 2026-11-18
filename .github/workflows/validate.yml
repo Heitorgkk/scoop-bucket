@@ -163,7 +163,7 @@ jobs:
         run: |
           Write-Host (Get-Content "$env:RUNNER_TEMP\setup-exit.txt")
           Import-Module Appx -UseWindowsPowerShell -WarningAction SilentlyContinue
-          Get-AppxPackage -Name Claude, OpenAI.Codex | Format-Table Name, Version, Publisher
+          'Claude', 'OpenAI.Codex' | ForEach-Object { Get-AppxPackage -Name $_ } | Format-Table Name, Version, Publisher
           if (-not (Get-AppxPackage -Name Claude)) { throw 'Claude MSIX not registered' }
           if (-not (Get-AppxPackage -Name OpenAI.Codex)) { throw 'ChatGPT MSIX not registered' }
           ./tests/ci/Assert-Installed.ps1 -Group ai,claude-extensions -External
