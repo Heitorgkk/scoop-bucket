@@ -113,8 +113,13 @@ function Split-ScoopReference([string] $Reference) {
 
 function Test-ScoopApp([string] $App) {
     <# True when a Scoop app is installed (user or global scope). Uses the files Scoop writes on success. #>
+    # Scoop writes scoop-install.json (install.json before v0.6.0) as the last step of a successful install.
     foreach ($root in @((Get-ScoopRoot), (Get-ScoopGlobalRoot))) {
-        if ($root -and (Test-Path -LiteralPath (Join-Path $root "apps\$App\current\manifest.json"))) { return $true }
+        if (-not $root) { continue }
+        $current = Join-Path $root "apps\$App\current"
+        foreach ($file in 'scoop-install.json', 'install.json') {
+            if (Test-Path -LiteralPath (Join-Path $current $file)) { return $true }
+        }
     }
     return $false
 }
