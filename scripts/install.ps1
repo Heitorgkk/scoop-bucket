@@ -1,8 +1,8 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Installs one or more Heitorgkk tool groups: the Scoop packages plus the tools
-    that are distributed through npm or WinGet only.
+    Installs one or more Heitorgkk tool groups: Scoop packages, npm packages,
+    desktop apps (WinGet or the vendor's signed MSIX) and Claude Code plugins/skills.
 
 .DESCRIPTION
     1. Validates the requested group(s) against groups.json.
@@ -11,7 +11,11 @@
        (or upgrading them with -Update):
          - Scoop packages with 'scoop install bucket/app'
          - npm packages with 'npm install -g' (installs main/nodejs-lts first if npm is missing)
-         - WinGet packages with 'winget install --exact --source winget'
+         - Claude Code skills by copying them to ~/.claude/skills
+         - Claude Code plugins with 'claude plugin install' (adds the marketplace first)
+         - desktop apps with 'winget install --exact --source winget'; when WinGet is missing,
+           blocked, fails, or -NoWinGet is given, the vendor's signed MSIX is downloaded and
+           installed per user with Add-AppxPackage
     4. Registers the Heitorgkk/<group> metapackage, so 'scoop update <group>' later
        picks up tools added to the group.
     5. Prints a summary and exits with 0 (all good), 1 (some tool failed) or 2
@@ -20,13 +24,17 @@
     No step requires administrator rights.
 
 .PARAMETER Group
-    One or more groups. See groups.json; currently: main, ai, terminal, utilities, all.
+    One or more groups. See groups.json; currently: main, ai, terminal, utilities,
+    claude-extensions, all.
 
 .PARAMETER Update
     Upgrade tools that are already installed instead of skipping them.
 
 .PARAMETER ScoopOnly
-    Only handle Scoop packages; skip npm and WinGet tools.
+    Only handle Scoop packages; skip npm, desktop apps and Claude plugins/skills.
+
+.PARAMETER NoWinGet
+    Never use WinGet: install desktop apps from the vendor's official MSIX instead.
 
 .PARAMETER DryRun
     Show what would be done without changing anything (no buckets added, nothing installed).
@@ -44,12 +52,14 @@
     .\scripts\install.ps1 -Group all -Update
 #>
 [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSReviewUnusedParameter', 'Update', Justification = 'Read by the helper functions in script scope.')]
+[Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSReviewUnusedParameter', 'NoWinGet', Justification = 'Read by the helper functions in script scope.')]
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true, Position = 0)]
     [string[]] $Group,
     [switch] $Update,
     [switch] $ScoopOnly,
+    [switch] $NoWinGet,
     [switch] $DryRun,
     [string] $BucketSource,
     [string] $CatalogPath
@@ -57,6 +67,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'lib\Common.ps1')
+. (Join-Path $PSScriptRoot 'lib\Tools.ps1')
 
 # WinGet exit codes that mean "nothing to do" rather than failure.
 $WINGET_NO_UPDATE = -1978335189          # 0x8A15002B  no applicable upgrade
@@ -78,7 +89,7 @@ function Invoke-ScoopTool($Tool) {
     $ref = Split-ScoopReference $Tool.package
     $installed = Test-ScoopApp $ref.App
     if ($installed -and -not $Update) { Add-Result $Tool.name 'scoop' 'already installed' $Tool.package; return }
-    if ($DryRun) { Add-Result $Tool.name 'scoop' 'would install' $Tool.package; return }
+    if ($DryRun) { Add-Result $Tool.name 'scoop' $(if ($installed) { 'would update' } else { 'would install' }) $Tool.package; return }
 
     if ($installed) {
         Write-Info "scoop update $($ref.App)"
@@ -96,39 +107,17 @@ function Invoke-ScoopTool($Tool) {
 
 # ---------------------------------------------------------------------------- npm
 
-function Get-NpmCommand {
-    # Prefer npm.cmd: npm.ps1 may be blocked by the execution policy.
-    foreach ($name in 'npm.cmd', 'npm') {
-        $cmd = Get-Command $name -ErrorAction SilentlyContinue
-        if ($cmd) { return $cmd.Source }
-    }
-    return $null
-}
-
-function Test-NpmGlobalPackage([string] $Npm, [string] $Package) {
-    & $Npm ls --global --depth=0 $Package *> $null
-    return ($LASTEXITCODE -eq 0)
-}
-
 function Invoke-NpmTool($Tool) {
-    $npm = Get-NpmCommand
-    $requires = @(Get-ToolProperty $Tool 'requires' @())
-    if (-not $npm) {
-        $missing = @($requires | Where-Object { -not (Test-ScoopApp (Split-ScoopReference $_).App) })
+    if (-not (Get-NpmCommand)) {
         if ($DryRun) {
-            Add-Result $Tool.name 'npm' 'would install' "npm i -g $($Tool.package) (after: $($missing -join ', '))"
+            Add-Result $Tool.name 'npm' 'would install' "after: $((Get-MissingPrerequisite $Tool) -join ', ')"
             return
         }
-        foreach ($req in $missing) {
-            Write-Info "npm is missing; installing prerequisite $req"
-            & scoop install $req | Out-Host
-        }
-        Update-SessionPath
-        $npm = Get-NpmCommand
-        if (-not $npm) { Add-Result $Tool.name 'npm' 'failed' "npm not found (prerequisite: $($requires -join ', '))"; return }
+        Install-Prerequisite $Tool
+        if (-not (Get-NpmCommand)) { Add-Result $Tool.name 'npm' 'failed' "npm not found (prerequisite: $((Get-ToolProperty $Tool 'requires' @()) -join ', '))"; return }
     }
-
-    $installed = Test-NpmGlobalPackage $npm $Tool.package
+    $npm = Get-NpmCommand
+    $installed = Test-NpmTool $Tool
     if ($installed -and -not $Update) { Add-Result $Tool.name 'npm' 'already installed' $Tool.package; return }
     if ($DryRun) { Add-Result $Tool.name 'npm' $(if ($installed) { 'would update' } else { 'would install' }) $Tool.package; return }
 
@@ -136,43 +125,76 @@ function Invoke-NpmTool($Tool) {
     Write-Info "npm install --global $($Tool.package)@latest"
     & $npm install --global "$($Tool.package)@latest" | Out-Host
     $code = $LASTEXITCODE
-    if ($code -eq 0 -and (Test-NpmGlobalPackage $npm $Tool.package)) {
+    if ($code -eq 0 -and (Test-NpmTool $Tool)) {
         Add-Result $Tool.name 'npm' $(if ($installed) { 'updated' } else { 'installed' }) $Tool.package
     } else {
         Add-Result $Tool.name 'npm' 'failed' "npm exited with $code"
     }
 }
 
-# ---------------------------------------------------------------------------- WinGet
+# ---------------------------------------------------------------------------- desktop apps (WinGet / MSIX)
 
-function Test-WinGetPackage([string] $Id) {
-    & winget list --id $Id --exact --accept-source-agreements --disable-interactivity *> $null
-    return ($LASTEXITCODE -eq 0)
-}
-
-function Invoke-WinGetTool($Tool) {
-    if (-not (Test-Command winget)) {
-        if ($DryRun) { Add-Result $Tool.name 'winget' 'blocked' 'winget not found; this tool would fail'; return }
-        Add-Result $Tool.name 'winget' 'failed' 'winget not found. Install/update "App Installer" from the Microsoft Store (https://aka.ms/getwinget).'
-        return
-    }
-    $installed = Test-WinGetPackage $Tool.package
-    if ($installed -and -not $Update) { Add-Result $Tool.name 'winget' 'already installed' $Tool.package; return }
-    if ($DryRun) { Add-Result $Tool.name 'winget' $(if ($installed) { 'would update' } else { 'would install' }) $Tool.package; return }
-
-    $verb = if ($installed) { 'upgrade' } else { 'install' }
+function Install-WithWinGet($Tool, [bool] $IsInstalled) {
+    $verb = if ($IsInstalled) { 'upgrade' } else { 'install' }
     $wingetArgs = @($verb, '--id', $Tool.package, '--exact', '--source', 'winget',
         '--accept-package-agreements', '--accept-source-agreements', '--disable-interactivity', '--silent')
     Write-Info "winget $($wingetArgs -join ' ')"
     & winget @wingetArgs | Out-Host
     $code = $LASTEXITCODE
-    if ($code -eq 0) {
-        Add-Result $Tool.name 'winget' $(if ($installed) { 'updated' } else { 'installed' }) $Tool.package
-    } elseif ($code -eq $WINGET_NO_UPDATE -or $code -eq $WINGET_ALREADY_INSTALLED) {
-        Add-Result $Tool.name 'winget' 'up to date' $Tool.package
-    } else {
-        Add-Result $Tool.name 'winget' 'failed' ('winget exited with 0x{0:X8}' -f $code)
+    if ($code -eq 0) { if ($IsInstalled) { return 'updated' } else { return 'installed' } }
+    if ($code -eq $WINGET_NO_UPDATE -or $code -eq $WINGET_ALREADY_INSTALLED) { return 'up to date' }
+    throw ('winget exited with 0x{0:X8}' -f $code)
+}
+
+function Invoke-DesktopTool($Tool) {
+    $direct = Get-ToolProperty $Tool 'direct'
+    $useWinGet = (-not $NoWinGet) -and (Test-WinGetUsable)
+    $route = if ($useWinGet) { 'winget' } elseif ($direct) { 'msix' } else { $null }
+    $label = if ($route -eq 'msix') { "msix ($($direct.appxName))" } else { $Tool.package }
+
+    $installed = Test-DesktopTool $Tool
+    if ($installed -and -not $Update) { Add-Result $Tool.name $Tool.source 'already installed' $label; return }
+    if (-not $route) {
+        $why = if ($NoWinGet) { '-NoWinGet was given' } else { 'winget is not available' }
+        $status = if ($DryRun) { 'blocked' } else { 'failed' }
+        Add-Result $Tool.name 'winget' $status "$why and the tool has no direct download (see https://aka.ms/getwinget)"
+        return
     }
+    if ($DryRun) { Add-Result $Tool.name $route $(if ($installed) { 'would update' } else { 'would install' }) $label; return }
+
+    if ($route -eq 'winget') {
+        try {
+            Add-Result $Tool.name 'winget' (Install-WithWinGet $Tool $installed) $Tool.package
+            return
+        } catch {
+            if (-not $direct) { throw }
+            Write-Warn "WinGet failed ($($_.Exception.Message)); falling back to the official MSIX."
+        }
+    }
+    Add-Result $Tool.name 'msix' (Install-DirectMsix $Tool) "$($direct.appxName) from $((Get-ToolProperty $direct.url (Get-OSArchitecture)) -replace '^https://([^/]+)/.*$', '$1')"
+}
+
+# ---------------------------------------------------------------------------- Claude Code
+
+function Invoke-ClaudePluginTool($Tool) {
+    if (-not (Get-ClaudeCommand)) {
+        if ($DryRun) { Add-Result $Tool.name 'claude-plugin' 'would install' "after: $((Get-MissingPrerequisite $Tool) -join ', ')"; return }
+        Install-Prerequisite $Tool
+        if (-not (Get-ClaudeCommand)) { Add-Result $Tool.name 'claude-plugin' 'failed' 'claude not found after installing main/claude-code'; return }
+    }
+    $installed = Test-ClaudePluginTool $Tool
+    if ($installed -and -not $Update) { Add-Result $Tool.name 'claude-plugin' 'already installed' $Tool.package; return }
+    if ($DryRun) { Add-Result $Tool.name 'claude-plugin' $(if ($installed) { 'would update' } else { 'would install' }) $Tool.package; return }
+    Add-Result $Tool.name 'claude-plugin' (Install-ClaudePlugin $Tool $catalog $installed) $Tool.package
+}
+
+function Invoke-ClaudeSkillTool($Tool) {
+    $state = Get-SkillState $Tool $repoRoot
+    $dest = (Get-SkillPaths $Tool $repoRoot).Destination
+    if ($state -eq 'current') { Add-Result $Tool.name 'claude-skill' $(if ($Update) { 'up to date' } else { 'already installed' }) $dest; return }
+    if ($state -eq 'differs' -and -not $Update) { Add-Result $Tool.name 'claude-skill' 'already installed' 'local copy differs; -Update overwrites it'; return }
+    if ($DryRun) { Add-Result $Tool.name 'claude-skill' $(if ($state -eq 'missing') { 'would install' } else { 'would update' }) $dest; return }
+    Add-Result $Tool.name 'claude-skill' (Install-ClaudeSkill $Tool $repoRoot) $dest
 }
 
 # ---------------------------------------------------------------------------- metapackages
@@ -196,6 +218,8 @@ function Invoke-Metapackage([string] $Bucket, [string] $Name) {
 # ---------------------------------------------------------------------------- main
 try {
     if ($CatalogPath) { $catalog = Get-Catalog -Path $CatalogPath } else { $catalog = Get-Catalog }
+    $repoRoot = $script:RepoRoot
+    if ($CatalogPath) { $repoRoot = Split-Path -Parent (Resolve-Path -LiteralPath $CatalogPath).ProviderPath }
     $valid = Get-GroupNames $catalog
     $Group = @($Group | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim().ToLowerInvariant() } |
             Where-Object { $_ } | Select-Object -Unique)
@@ -237,8 +261,9 @@ try {
         }
     }
 
-    # Scoop first (nodejs must exist before npm tools), then npm, then WinGet.
-    $tools = @(foreach ($src in 'scoop', 'npm', 'winget') { $tools | Where-Object { $_.source -eq $src } })
+    # Scoop first (nodejs/claude-code must exist before npm tools and plugins), then the rest.
+    $order = 'scoop', 'npm', 'claude-skill', 'claude-plugin', 'winget'
+    $tools = @(foreach ($src in $order) { $tools | Where-Object { $_.source -eq $src } })
     $i = 0
     foreach ($tool in $tools) {
         $i++
@@ -247,7 +272,9 @@ try {
             switch ($tool.source) {
                 'scoop' { Invoke-ScoopTool $tool }
                 'npm' { Invoke-NpmTool $tool }
-                'winget' { Invoke-WinGetTool $tool }
+                'winget' { Invoke-DesktopTool $tool }
+                'claude-plugin' { Invoke-ClaudePluginTool $tool }
+                'claude-skill' { Invoke-ClaudeSkillTool $tool }
                 default { Add-Result $tool.name $tool.source 'failed' "unknown source '$($tool.source)'" }
             }
         } catch {
