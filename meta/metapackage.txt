@@ -1,0 +1,4 @@
+This file is a placeholder payload for the Heitorgkk/scoop-bucket metapackages.
+Scoop requires every manifest to download something; the real content of a
+metapackage is its "depends" list. Do not modify this file: its SHA256 is
+pinned in every bucket/*.json manifest.
