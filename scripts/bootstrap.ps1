@@ -111,6 +111,11 @@ try {
     if ($CatalogPath) { $catalog = Get-Catalog -Path $CatalogPath } else { $catalog = Get-Catalog }
     $own = $catalog.bucket.name
     if (-not $BucketSource) { $BucketSource = $catalog.bucket.url }
+    elseif (Test-Path -LiteralPath $BucketSource -PathType Container) {
+        # 'scoop bucket add' only accepts git URLs; turn a local checkout into a file:/// URL.
+        $full = (Resolve-Path -LiteralPath $BucketSource).ProviderPath
+        $BucketSource = 'file:///' + ($full -replace '\\', '/').TrimStart('/')
+    }
     $known = @($catalog.buckets.PSObject.Properties | ForEach-Object { $_.Name })
 
     if (-not $Bucket) { $Bucket = $known }
