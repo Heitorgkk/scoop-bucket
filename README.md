@@ -346,8 +346,8 @@ hash is updated.
    - `source`: `scoop` (`package` = `bucket/app`, always explicit), `npm` (`package` = npm
      name), `winget` (`package` = WinGet id), `claude-plugin` (`package` = `plugin@marketplace`)
      or `claude-skill` (`package` = `claude/skills/<name>`).
-   - For `winget` apps, add a `direct` block (`type: msix`, `url.x64`/`url.arm64`, `appxName`,
-     `signer`) with the vendor's stable "latest" MSIX URL, so the app also installs without WinGet.
+   - For `winget` apps, add a `direct` block (`type: msix`, `url.x64`/`url.arm64`, `appxName`, and an exact
+     `publisher` and/or a `signer` name) with the vendor's stable "latest" MSIX URL, so the app also installs without WinGet.
    - Optional: `requirements` (shown in the README), `requires` (Scoop packages that must
      exist first, for example `["main/nodejs-lts"]` for npm tools).
    - A new official bucket must also be added to `buckets`.

@@ -21,7 +21,7 @@ generated README table (between the `BEGIN/END GENERATED TOOLS TABLE` markers).
 Prefer an official Scoop manifest. Use npm/WinGet only when no working Scoop manifest
 exists, and record why in the README's "Why some tools are not Scoop packages" table.
 For a WinGet desktop app, add a `direct` block (`type: msix`, `url.x64`/`url.arm64`,
-`appxName`, `signer`) pointing at the vendor's own stable "latest" MSIX URL so it can be
+`appxName`, and the exact MSIX `publisher` and/or a `signer` name) pointing at the vendor's own stable "latest" MSIX URL so it can be
 installed without WinGet.
 
 ## 2. Edit `groups.json`

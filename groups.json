@@ -136,7 +136,7 @@
                             "arm64": "https://persistent.oaistatic.com/codex-app-prod/ChatGPT-arm64.msix"
                         },
                         "appxName": "OpenAI.Codex",
-                        "signer": "OpenAI"
+                        "publisher": "CN=50BDFD77-8903-4850-9FFE-6E8522F64D5B"
                     }
                 },
                 {
