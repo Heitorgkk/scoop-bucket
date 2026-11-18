@@ -14,6 +14,7 @@ generated README table (between the `BEGIN/END GENERATED TOOLS TABLE` markers).
 |---|---|---|
 | `scoop` | `https://raw.githubusercontent.com/ScoopInstaller/<Main\|Extras\|Java>/HEAD/bucket/<app>.json` returns 200 | `bucket/app`, e.g. `main/jq` |
 | `npm` | `https://registry.npmjs.org/<pkg>/latest` | npm name, e.g. `@google/gemini-cli` |
+| `uv-tool` | `https://pypi.org/pypi/<dist>/json` | PyPI requirement, e.g. `headroom-ai[mcp]`; also set `command` and optionally `python` |
 | `winget` | `manifests/<l>/<Publisher>/<Name>/` exists in microsoft/winget-pkgs | WinGet id, e.g. `Anthropic.Claude` |
 | `claude-plugin` | plugin listed in the marketplace's `.claude-plugin/marketplace.json` | `plugin@marketplace` |
 | `claude-skill` | `claude/skills/<name>/SKILL.md` exists with `name: <name>` frontmatter | `claude/skills/<name>` |
@@ -27,7 +28,10 @@ installed without WinGet.
 ## 2. Edit `groups.json`
 
 Add the entry to the right group's `tools` (fields: `name`, `source`, `package`, `summary`,
-`homepage`, optional `command`, `requirements`, `requires`). A new official bucket goes in
+`homepage`, optional `command`, `requirements`, `requires`, `integration`). An `integration` is a
+post-install configuration step: add its id to `INTEGRATIONS` in `tools/catalog.py` and implement
+`Get-*State`/`Install-*Integration` in `scripts/lib/Integrations.ps1` (state check first; only idempotent
+commands may re-run on `-Update`). A new official bucket goes in
 `buckets`, a new plugin marketplace in `claudeMarketplaces`. A new group must be lowercase,
 must not clash with an existing Scoop app name, and must be added to `all.includes`.
 

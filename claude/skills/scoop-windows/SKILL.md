@@ -28,7 +28,8 @@ instead of downloading installers, using Chocolatey, or asking for admin rights.
 Groups are installed with the repository's script (it skips what is already installed):
 
 ```powershell
-& "$env:USERPROFILE\scoop\buckets\Heitorgkk\scripts\install.ps1" -Group <main|ai|terminal|utilities|claude-extensions|all>
+& "$env:USERPROFILE\scoop\buckets\Heitorgkk\scripts\install.ps1" -Group <main|ai|terminal|utilities|claude-extensions|claude-tools|all>
+& "$env:USERPROFILE\scoop\buckets\Heitorgkk\scripts\setup-claude.ps1" -Check              # RTK/Graphify/Headroom/plugins report
 & "$env:USERPROFILE\scoop\buckets\Heitorgkk\scripts\install.ps1" -Group all -Update   # upgrade everything
 & "$env:USERPROFILE\scoop\buckets\Heitorgkk\scripts\status.ps1"                       # what is installed
 ```
@@ -40,6 +41,9 @@ The authoritative list of tools is `~\scoop\buckets\Heitorgkk\groups.json`.
 - **npm globals** (e.g. `@google/gemini-cli`) live in Scoop's persisted Node prefix
   (`~\scoop\persist\nodejs-lts\bin`) and survive Node updates. Install/upgrade with
   `npm install -g <pkg>@latest`; use `npm.cmd` if `npm.ps1` is blocked by execution policy.
+- **Python CLIs** (Graphify `graphifyy`, Headroom `headroom-ai[mcp]`) are `uv tool`s from `main/uv`,
+  kept under `~\scoop\persist\uv`. Install/upgrade with `uv tool install --python 3.13 <pkg>` /
+  `uv tool upgrade <pkg>`; never `pip install` them globally.
 - **Desktop apps** (Claude Desktop `Anthropic.Claude`, ChatGPT `OpenAI.ChatGPT`) come from
   WinGet. If WinGet is unavailable, `install.ps1 -NoWinGet` installs the vendor's signed
   MSIX directly with `Add-AppxPackage`.
@@ -48,7 +52,12 @@ The authoritative list of tools is `~\scoop\buckets\Heitorgkk\groups.json`.
 
 - Java: `temurin-lts-jdk` sets `JAVA_HOME` to `~\scoop\apps\temurin-lts-jdk\current`.
 - Rust: `rustup` keeps `CARGO_HOME`/`RUSTUP_HOME` under `~\scoop\persist\rustup`. The MSVC
-  toolchain needs Microsoft C++ Build Tools, which are not installed automatically.
+  toolchain needs Microsoft C++ Build Tools, which are not installed automatically, so the GNU
+  toolchain `stable-x86_64-pc-windows-gnu` is used with MSYS2 (`main/msys2`, MINGW64 gcc on PATH via
+  `~\scoop\apps\msys2\current\mingw64\bin`). Extra C libraries: `pacman -S mingw-w64-x86_64-<lib>` from a
+  `mingw64` shell. After `scoop update msys2`, re-run `install.ps1 -Group main` (it reinstalls gcc).
+- Claude Code: the RTK hook, Headroom MCP (no proxy; never set `ANTHROPIC_BASE_URL`), Graphify skill,
+  Ponytail and Context Mode plugins come from the `claude-tools` group.
 - Docker: `main/docker` is the Docker CLI + engine for **Windows containers only**, not
   Docker Desktop. Use `docker context`/`DOCKER_HOST` for a Linux engine.
 - Git for Windows comes from `main/git`; Git Bash is what Claude Code uses on Windows.
