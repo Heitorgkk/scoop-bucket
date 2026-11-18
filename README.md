@@ -139,10 +139,10 @@ The table below is generated from [`groups.json`](groups.json).
 | `main` | [rustup](https://rustup.rs/) | Rust toolchain manager (MSVC host by default) | Scoop `main/rustup` | The MSVC toolchain needs Microsoft C++ Build Tools (MSVC + Windows SDK), installed separately. |
 | `main` | [docker](https://www.docker.com/) | Docker CLI + Docker Engine (dockerd) for Windows containers. NOT Docker Desktop | Scoop `main/docker` | dockerd only runs Windows containers and needs the Windows 'Containers' feature; registering the service (dockerd --register-service) needs an elevated shell. The CLI can talk to any remote/WSL Linux engine. x64 only. |
 | `ai` | [claude-code](https://code.claude.com/) | Claude Code CLI (official Anthropic native binary) | Scoop `main/claude-code` | Needs Git for Windows (Git Bash); provided by the main group. |
-| `ai` | [claude-gui](https://claude.com/download) | Claude Desktop, official Anthropic installer | WinGet `Anthropic.Claude` | WinGet (App Installer). Windows 10 2004 (19041) or later. |
+| `ai` | [claude-gui](https://claude.com/download) | Claude Desktop, official Anthropic installer | WinGet `Anthropic.Claude` or official MSIX | WinGet, or (with -NoWinGet / when WinGet is unavailable) MSIX sideloading. Windows 10 2004 (19041) or later. |
 | `ai` | [gemini-cli](https://github.com/google-gemini/gemini-cli) | Google Gemini CLI (official npm package) | npm `@google/gemini-cli` | Node.js 20+ / npm. install.ps1 installs main/nodejs-lts first when npm is missing. |
 | `ai` | [codex](https://github.com/openai/codex) | OpenAI Codex CLI | Scoop `main/codex` |  |
-| `ai` | [chatgpt-gui](https://chatgpt.com/download) | ChatGPT Desktop, official OpenAI MSIX | WinGet `OpenAI.ChatGPT` | WinGet (App Installer). Windows 10 2004 (19041) or later. |
+| `ai` | [chatgpt-gui](https://chatgpt.com/download) | ChatGPT Desktop, official OpenAI MSIX | WinGet `OpenAI.ChatGPT` or official MSIX | WinGet, or (with -NoWinGet / when WinGet is unavailable) MSIX sideloading. Windows 10 2004 (19041) or later. |
 | `ai` | [opencode](https://opencode.ai/) | OpenCode CLI (v2; not the desktop app) | Scoop `main/opencode` | v2 config is incompatible with v1; see https://opencode.ai/docs/migrate-v1/. |
 | `terminal` | [windows-terminal](https://github.com/microsoft/terminal) | Windows Terminal (portable) | Scoop `extras/windows-terminal` |  |
 | `terminal` | [oh-my-posh](https://ohmyposh.dev/) | Prompt theme engine | Scoop `main/oh-my-posh` | Enable it in your shell profile; see https://ohmyposh.dev/docs/installation/prompt. A Nerd Font is recommended. |
@@ -156,6 +156,16 @@ The table below is generated from [`groups.json`](groups.json).
 | `utilities` | [sharex](https://getsharex.com/) | Screenshot and screen capture | Scoop `extras/sharex` | x64 build only; runs under emulation on Windows 11 ARM64. |
 | `utilities` | [7zip](https://www.7-zip.org/) | File archiver | Scoop `main/7zip` |  |
 | `utilities` | [localsend](https://localsend.org/) | Local network file sharing | Scoop `extras/localsend` |  |
+| `claude-extensions` | [commit-commands](https://github.com/anthropics/claude-plugins-official/tree/main/plugins/commit-commands) | Slash commands for commit, push and PR workflows | Claude plugin `commit-commands@claude-plugins-official` |  |
+| `claude-extensions` | [feature-dev](https://github.com/anthropics/claude-plugins-official/tree/main/plugins/feature-dev) | Guided feature development with explorer/architect/reviewer agents | Claude plugin `feature-dev@claude-plugins-official` |  |
+| `claude-extensions` | [code-review](https://github.com/anthropics/claude-plugins-official/tree/main/plugins/code-review) | Multi-agent pull request review | Claude plugin `code-review@claude-plugins-official` |  |
+| `claude-extensions` | [pr-review-toolkit](https://github.com/anthropics/claude-plugins-official/tree/main/plugins/pr-review-toolkit) | Specialised PR review agents (tests, errors, types, comments) | Claude plugin `pr-review-toolkit@claude-plugins-official` |  |
+| `claude-extensions` | [security-guidance](https://github.com/anthropics/claude-plugins-official/tree/main/plugins/security-guidance) | Security warnings and review for edited code | Claude plugin `security-guidance@claude-plugins-official` |  |
+| `claude-extensions` | [claude-md-management](https://github.com/anthropics/claude-plugins-official/tree/main/plugins/claude-md-management) | Audit and improve CLAUDE.md files | Claude plugin `claude-md-management@claude-plugins-official` |  |
+| `claude-extensions` | [skill-creator](https://github.com/anthropics/claude-plugins-official/tree/main/plugins/skill-creator) | Create, improve and evaluate skills | Claude plugin `skill-creator@claude-plugins-official` |  |
+| `claude-extensions` | [frontend-design](https://github.com/anthropics/claude-plugins-official/tree/main/plugins/frontend-design) | Production-grade frontend/UI design guidance | Claude plugin `frontend-design@claude-plugins-official` |  |
+| `claude-extensions` | [document-skills](https://github.com/anthropics/skills) | Excel, Word, PowerPoint and PDF skills | Claude plugin `document-skills@anthropic-agent-skills` |  |
+| `claude-extensions` | [scoop-windows](https://github.com/Heitorgkk/scoop-bucket/tree/main/claude/skills/scoop-windows) | Personal skill: how this machine installs tools (Scoop, Heitorgkk bucket, npm, WinGet) | Claude skill `claude/skills/scoop-windows` |  |
 <!-- END GENERATED TOOLS TABLE -->
 
 ### Why some tools are not Scoop packages
