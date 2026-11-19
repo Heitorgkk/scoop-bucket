@@ -54,15 +54,15 @@ if ($LASTEXITCODE -ne 0) { Write-Host "PASS  install: -Group is mandatory (exit 
 else { Write-Host 'FAIL  install: -Group is mandatory (exit 0)' -ForegroundColor Red; $failures++ }
 
 # --- dry runs -> exit 0 and list the expected tools
-Invoke-Case 'dry run: main' 0 @($install, '-Group', 'main', '-DryRun') '7 tool\(s\): gh, git, nodejs, jdk, rustup, msys2, docker'
+Invoke-Case 'dry run: main' 0 @($install, '-Group', 'main', '-DryRun') '8 tool\(s\): gh, git, nodejs, jdk, rustup, msys2, docker, vscode'
 Invoke-Case 'dry run: main configures msys2-rust' 0 @($install, '-Group', 'main', '-DryRun') 'msys2 integration'
 Invoke-Case 'dry run: claude-tools' 0 @($install, '-Group', 'claude-tools', '-DryRun') '6 tool\(s\): uv, rtk, graphify, headroom, ponytail, context-mode'
 Invoke-Case 'dry run: claude-tools integrations' 0 @($install, '-Group', 'claude-tools', '-DryRun') 'Configuring 3 integration\(s\)'
 Invoke-Case 'dry run: -ScoopOnly skips integrations' 0 @($install, '-Group', 'claude-tools', '-DryRun', '-ScoopOnly') '2 tool\(s\): uv, rtk'
 Invoke-Case 'dry run: ai' 0 @($install, '-Group', 'ai', '-DryRun') 'claude-gui.*gemini-cli|gemini-cli'
 Invoke-Case 'dry run: case-insensitive + comma list' 0 @($install, '-Group', 'TERMINAL,utilities', '-DryRun') '12 tool\(s\)'
-Invoke-Case 'dry run: all = every tool once' 0 @($install, '-Group', 'all', '-DryRun') '41 tool\(s\)'
-Invoke-Case 'dry run: all + main does not duplicate' 0 @($install, '-Group', 'all,main', '-DryRun') '41 tool\(s\)'
+Invoke-Case 'dry run: all = every tool once' 0 @($install, '-Group', 'all', '-DryRun') '42 tool\(s\)'
+Invoke-Case 'dry run: all + main does not duplicate' 0 @($install, '-Group', 'all,main', '-DryRun') '42 tool\(s\)'
 Invoke-Case 'dry run: claude-extensions' 0 @($install, '-Group', 'claude-extensions', '-DryRun') '10 tool\(s\): commit-commands'
 Invoke-Case 'dry run: claude-extensions needs main/claude-code' 0 @($install, '-Group', 'claude-extensions', '-DryRun') 'Buckets needed: main, Heitorgkk'
 Invoke-Case 'dry run: -NoWinGet uses the MSIX route' 0 @($install, '-Group', 'ai', '-DryRun', '-NoWinGet') 'chatgpt-gui\s+msix'

@@ -28,7 +28,7 @@ BUCKET_DIR = ROOT / "bucket"
 README = ROOT / "README.md"
 PAYLOAD = ROOT / "meta" / "metapackage.txt"
 
-METAPACKAGE_VERSION = "1.2.0"
+METAPACKAGE_VERSION = "1.3.0"
 LICENSE = "Unlicense"
 SOURCES = {"scoop", "npm", "uv-tool", "winget", "claude-plugin", "claude-skill"}
 # Post-install configuration steps implemented in scripts/lib/Integrations.ps1.
@@ -37,6 +37,9 @@ DIRECT_ARCHS = {"x64", "arm64"}
 SCHEMA_URL = "https://raw.githubusercontent.com/ScoopInstaller/Scoop/master/schema.json"
 README_BEGIN = "<!-- BEGIN GENERATED TOOLS TABLE (tools/catalog.py generate) -->"
 README_END = "<!-- END GENERATED TOOLS TABLE -->"
+POST_INSTALL = ROOT / "docs" / "post-install.md"
+LIST_BEGIN = "<!-- BEGIN GENERATED TOOLS LIST (tools/catalog.py generate) -->"
+LIST_END = "<!-- END GENERATED TOOLS LIST -->"
 
 
 class CatalogError(Exception):
@@ -139,13 +142,34 @@ def build_readme_table(catalog: dict) -> str:
     return "\n".join(lines)
 
 
-def render_readme(catalog: dict, text: str) -> str:
+def build_post_install_list(catalog: dict) -> str:
+    """Per-group tool list for docs/post-install.md (the page setup.ps1 opens at the end)."""
+    lines = [LIST_BEGIN]
+    for gname, g in catalog["groups"].items():
+        tools = g.get("tools", [])
+        if not tools:
+            continue
+        lines += ["", f"### {g['title']} (`{gname}`)", "", "| Tool | What it does | Source |", "|---|---|---|"]
+        lines += [f"| [{t['name']}]({t['homepage']}) | {t['summary']} | {source_label(t)} |" for t in tools]
+    lines += ["", LIST_END]
+    return "\n".join(lines)
+
+
+def render_block(text: str, begin: str, end: str, block: str, name: str) -> str:
     try:
-        before, rest = text.split(README_BEGIN, 1)
-        _, after = rest.split(README_END, 1)
+        before, rest = text.split(begin, 1)
+        _, after = rest.split(end, 1)
     except ValueError:
-        raise CatalogError(f"README.md is missing the generated table markers ({README_BEGIN!r})")
-    return before + build_readme_table(catalog) + after
+        raise CatalogError(f"{name} is missing the generated markers ({begin!r})")
+    return before + block + after
+
+
+def render_readme(catalog: dict, text: str) -> str:
+    return render_block(text, README_BEGIN, README_END, build_readme_table(catalog), "README.md")
+
+
+def render_post_install(catalog: dict, text: str) -> str:
+    return render_block(text, LIST_BEGIN, LIST_END, build_post_install_list(catalog), "docs/post-install.md")
 
 
 # --------------------------------------------------------------------------- checks
@@ -292,6 +316,15 @@ def check_generated(catalog: dict) -> list[str]:
             errors.append(str(exc))
     else:
         errors.append("README.md is missing")
+    if POST_INSTALL.exists():
+        text = POST_INSTALL.read_text(encoding="utf-8")
+        try:
+            if render_post_install(catalog, text) != text:
+                errors.append("docs/post-install.md tool list is out of sync (run: python tools/catalog.py generate)")
+        except CatalogError as exc:
+            errors.append(str(exc))
+    else:
+        errors.append("docs/post-install.md is missing (setup.ps1 opens it after installing)")
     return errors
 
 
@@ -428,6 +461,9 @@ def cmd_generate(catalog: dict) -> int:
     if README.exists():
         README.write_text(render_readme(catalog, README.read_text(encoding="utf-8")), encoding="utf-8", newline="\n")
         print("updated README.md tool table")
+    if POST_INSTALL.exists():
+        POST_INSTALL.write_text(render_post_install(catalog, POST_INSTALL.read_text(encoding="utf-8")), encoding="utf-8", newline="\n")
+        print("updated docs/post-install.md tool list")
     return 0
 
 

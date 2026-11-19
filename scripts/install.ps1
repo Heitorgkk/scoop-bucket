@@ -366,6 +366,7 @@ try {
         exit $EXIT_FAILURES
     }
     Write-Ok 'All done. Open a new terminal so PATH changes take effect everywhere.'
+    Write-Info 'Next steps (Oh My Posh, Everything, sign-ins, ...): docs/post-install.md'
     exit $EXIT_OK
 } catch {
     Write-Fail $_.Exception.Message

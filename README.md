@@ -17,6 +17,9 @@ where WinGet is missing or blocked, the vendor's signed MSIX. The same script se
 irm https://raw.githubusercontent.com/Heitorgkk/scoop-bucket/main/setup.ps1 | iex
 ```
 
+When it finishes it opens **[After the install](docs/post-install.md)**: sign-ins, Oh My Posh, Everything,
+PowerToys and the other one-time steps, plus the list of installed tools (`-NoBrowser` skips opening it).
+
 | Group | Title | Scoop | Script |
 |---|---|---|---|
 | `main` | Essential Development Tools | `scoop install Heitorgkk/main` | `.\scripts\install.ps1 -Group main` |
@@ -259,6 +262,7 @@ The table below is generated from [`groups.json`](groups.json).
 | `main` | [rustup](https://rustup.rs/) | Rust toolchain manager (MSVC host by default) | Scoop `main/rustup` | The MSVC toolchain needs Microsoft C++ Build Tools (MSVC + Windows SDK), installed separately. Without them, install.ps1 sets up the GNU toolchain with MSYS2 (see msys2). |
 | `main` | [msys2](https://www.msys2.org/) | MSYS2 with the MINGW64 gcc toolchain, wired to rustup's stable-x86_64-pc-windows-gnu | Scoop `main/msys2` | install.ps1 initialises MSYS2, installs mingw-w64-x86_64-gcc/pkgconf with pacman, appends mingw64\bin to the user PATH and installs the GNU Rust toolchain (made the default only when MSVC Build Tools are absent). 'scoop update msys2' drops pacman packages: re-run install.ps1 afterwards. x64 only. |
 | `main` | [docker](https://www.docker.com/) | Docker CLI + Docker Engine (dockerd) for Windows containers. NOT Docker Desktop | Scoop `main/docker` | dockerd only runs Windows containers and needs the Windows 'Containers' feature; registering the service (dockerd --register-service) needs an elevated shell. The CLI can talk to any remote/WSL Linux engine. x64 only. |
+| `main` | [vscode](https://code.visualstudio.com/) | Visual Studio Code editor (portable, per user) | Scoop `extras/vscode` | Scoop's notes ('scoop info vscode') show the .reg files that add 'Open with Code' to Explorer and register file associations. |
 | `ai` | [claude-code](https://code.claude.com/) | Claude Code CLI (official Anthropic native binary) | Scoop `main/claude-code` | Needs Git for Windows (Git Bash); provided by the main group. |
 | `ai` | [claude-gui](https://claude.com/download) | Claude Desktop, official Anthropic installer | WinGet `Anthropic.Claude` or official MSIX | WinGet, or (with -NoWinGet / when WinGet is unavailable) MSIX sideloading. Windows 10 2004 (19041) or later. |
 | `ai` | [gemini-cli](https://github.com/google-gemini/gemini-cli) | Google Gemini CLI (official npm package) | npm `@google/gemini-cli` | Node.js 20+ / npm. install.ps1 installs main/nodejs-lts first when npm is missing. |

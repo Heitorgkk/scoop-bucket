@@ -50,7 +50,9 @@ function Install-Scoop {
     $policy = Get-ExecutionPolicy -Scope CurrentUser
     if ($policy -in @('Undefined', 'Restricted', 'AllSigned')) {
         Write-Info "Setting execution policy for CurrentUser to RemoteSigned (was $policy), as required by Scoop."
-        Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser -Force
+        # Throws "overridden by a policy defined at a more specific scope" when Process is already Bypass
+        # (setup.ps1 sets it) even though the CurrentUser value was stored, so the error is not fatal.
+        try { Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser -Force } catch { Write-Warn $_.Exception.Message }
     }
     $installer = Join-Path ([IO.Path]::GetTempPath()) "install-scoop-$PID.ps1"
     try {

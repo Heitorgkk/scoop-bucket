@@ -33,6 +33,9 @@
 .PARAMETER BucketSource
     Passed to install.ps1/bootstrap.ps1 (git URL or local path of the Heitorgkk bucket).
 
+.PARAMETER NoBrowser
+    Do not open the post-install guide (docs/post-install.md) in the browser at the end.
+
 .NOTES
     No '#Requires' or [CmdletBinding()] here: the file must also work through Invoke-Expression.
 #>
@@ -43,7 +46,8 @@ param(
     [switch] $Update,
     [string] $Branch = 'main',
     [string] $SourcePath,
-    [string] $BucketSource
+    [string] $BucketSource,
+    [switch] $NoBrowser
 )
 
 $ErrorActionPreference = 'Stop'
@@ -57,7 +61,13 @@ try {
     if ($PSVersionTable.PSVersion.Major -ge 6 -and -not $IsWindows) { throw 'This installer only runs on Windows.' }
 
     # Allow the downloaded scripts to run in this process only (Scoop later sets RemoteSigned for the user).
-    Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope Process -Force
+    # Set-ExecutionPolicy throws a SecurityException when a Group Policy overrides the scope even though
+    # the value was stored; the check below decides whether scripts can actually run.
+    try { Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope Process -Force } catch { Write-Verbose $_.Exception.Message }
+    $effective = Get-ExecutionPolicy
+    if ($effective -in 'Restricted', 'AllSigned') {
+        throw "The execution policy is '$effective' (set by Group Policy) and blocks the installer scripts. Ask your administrator to allow RemoteSigned."
+    }
     # Windows PowerShell 5.1 may default to TLS 1.0/1.1, which GitHub refuses.
     [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
 
@@ -75,6 +85,8 @@ try {
         Expand-Archive -LiteralPath $zip -DestinationPath $workDir -Force
         $root = Get-ChildItem -LiteralPath $workDir -Directory | Select-Object -First 1 -ExpandProperty FullName
         if (-not $root -or -not (Test-Path (Join-Path $root 'groups.json'))) { throw 'Downloaded archive does not look like the scoop-bucket repository.' }
+        # Drop any Mark of the Web, so a RemoteSigned policy treats the extracted scripts as local.
+        Get-ChildItem -LiteralPath $root -Recurse -File | Unblock-File
     }
 
     $common = @{}
@@ -99,5 +111,13 @@ if ($setupResult -eq 0) {
     Write-Host 'Setup finished. Open a new terminal to use the installed tools.' -ForegroundColor Green
 } else {
     Write-Host "Setup finished with errors (code $setupResult). Re-run the same command to retry; installed tools are skipped." -ForegroundColor Yellow
+}
+# Exit code 2 means nothing (or almost nothing) was installed, so there is nothing to configure yet.
+if ($setupResult -ne 2) {
+    $guide = "https://github.com/$repo/blob/$Branch/docs/post-install.md"
+    Write-Host "Next steps (Oh My Posh, Everything, sign-ins, ...): $guide" -ForegroundColor Cyan
+    if (-not $NoBrowser -and -not $env:CI) {
+        try { Start-Process $guide } catch { Write-Verbose "Could not open a browser: $($_.Exception.Message)" }
+    }
 }
 $global:LASTEXITCODE = $setupResult
